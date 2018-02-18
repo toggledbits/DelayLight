@@ -95,25 +95,18 @@ end
 
 local function checkVersion(dev)
     local ui7Check = luup.variable_get(MYSID, "UI7Check", dev) or ""
-    if isOpenLuup and not debugMode then
+    if isOpenLuup then
         L("does not run on openLuup")
-        return false
+        return debugMode -- allow in debug mode
     end
     if luup.version_branch == 1 and luup.version_major >= 7 then
         if ui7Check == "" then
             -- One-time init for UI7 or better
             luup.variable_set(MYSID, "UI7Check", "true", dev)
         end
-    elseif luup.version_branch == 1 and luup.version_major < 5 then
-        error("Unsupported firmware " .. luup.version)
-    else
-        if ui7Check == "" then
-            -- One-time init for UI5/6
-            luup.variable_set(MYSID, "UI7Check", "false", dev)
-            luup.attr_set("device_json", "D_DelayLight.json", dev)
-            luup.reload()
-        end
+        return true
     end
+    return false
 end
 
 local function formatTime(delay)
@@ -223,6 +216,7 @@ end
 local function addEvent( t )
     local p = shallowCopy(t)
     p.when = os.time()
+    p.time = os.date("%Y%m%dT%H%M%S")
     table.insert( eventList, p )
     if #t > 25 then table.remove(1) end
 end
@@ -716,6 +710,7 @@ local function isActiveHouseMode( dev )
     for _,t in ipairs( activeList ) do
         if t == mode then return true end
     end
+    D("isActiveHouseMode() not an active house mode")
     return false
 end
 
@@ -787,11 +782,12 @@ end
 -- runOnce() looks to see if a core state variable exists; if not, a one-time initialization
 -- takes place. 
 local function runOnce( pdev )
+    D("runOnce(%1)", pdev)
     local s = getVarNumeric("Version", 0, pdev)
     if s == _CONFIGVERSION then
         -- Up to date.
         return
-    elseif (s == 0) then
+    elseif s == 0 then
         L("First run, setting up new instance...")
         luup.variable_set( MYSID, "Enabled", "1", pdev )
         luup.variable_set(MYSID, "Status", STATE_IDLE, pdev)
@@ -800,7 +796,7 @@ local function runOnce( pdev )
         luup.variable_set(MYSID, "Triggers", "", pdev)
         luup.variable_set(MYSID, "OnList", "", pdev)
         luup.variable_set(MYSID, "OffList", "", pdev)
-        luup.variable_set(MYSID, "AutoDelay", "0", pdev)
+        luup.variable_set(MYSID, "AutoDelay", "60", pdev)
         luup.variable_set(MYSID, "ManualDelay", "3600", pdev)
         luup.variable_set( MYSID, "OnDelay", 0, pdev )
         luup.variable_set( MYSID, "HoldOn", 0, pdev )
@@ -873,7 +869,6 @@ function start( pdev )
     sceneData = {}
     sceneWaiting = {}
     eventList = {}
-if pdev == 50 then debugMode = true end
 
     -- Check for ALTUI and OpenLuup
     local k,v
@@ -898,7 +893,11 @@ if pdev == 50 then debugMode = true end
     end
 
     -- Check UI version
-    checkVersion( pdev )
+    if not checkVersion( pdev ) then
+        L("This plugin does not run on this firmware.")
+        luup.set_failure( 1, pdev )
+        return false, "Incompatible firmware", _PLUGIN_NAME
+    end
 
     -- One-time stuff
     runOnce( pdev )
@@ -940,7 +939,7 @@ if pdev == 50 then debugMode = true end
 
     -- Start the timing loop. If we end up triggering below, trigger() will start
     -- a new cycle on better timing.
-    luup.call_delay( "delayLightTick", 10, runStamp .. ":" .. pdev )
+    luup.call_delay( "delayLightTick", getVarNumeric( "StartupDelay", 10, pdev, MYSID ), runStamp .. ":" .. pdev )
     
     -- Pick up where we left off before restart...
     if status ~= STATE_IDLE then
@@ -1019,7 +1018,7 @@ function trigger( state, pdev )
             if not isActiveHouseMode( pdev ) then
                 D("trigger() not in active house mode, not re-triggering/extending");
             end
-            delay = getVarNumeric( "AutoDelay", 0, pdev )
+            delay = getVarNumeric( "AutoDelay", 60, pdev )
             if delay == 0 then return end -- 0 delay means no auto-on function
         else
             delay = getVarNumeric( "ManualDelay", 3600, pdev )
@@ -1073,6 +1072,13 @@ function setDebug( state, pdev )
     if debugMode then
         D("Debug enabled")
     end
+end
+
+-- If you're wondering what this is, let me tell you my tale of woe... drop me an email.
+function getinfo( pdev )
+    luup.variable_set( MYSID, "int_da", json.encode(deviceActions), pdev )
+    luup.variable_set( MYSID, "int_el", json.encode(eventList), pdev )
+    luup.variable_set( MYSID, "int_pl", json.encode(pollList), pdev )
 end
 
 local function scaleNextTick( delay )
@@ -1236,17 +1242,18 @@ function request( lul_request, lul_parameters, lul_outputformat )
         for k,v in pairs( luup.devices ) do
             if v.device_type == MYTYPE then
                 devinfo = getDevice( k, luup.device, v ) or {}
-                devinfo.deviceActions = deviceActions
---[[ how do we get module data for an instance?                
-                devinfo.triggers = shallowCopy(triggerMap)
-                local n,o 
-                for n,o in pairs( devinfo.triggers ) do
-                    devinfo.triggers[n].__luupdevice = getDevice( n, luup.device ) or {}
+                -- Blech. The only way to return data from a specific instance is to use
+                -- an action, and have it return state variable contents. Egad. Why Vera? Why?
+                local rc,rs,job,rargs = luup.call_action( MYSID, "getinfo", {}, k )
+                if rc == 0 then
+                    for rc,rs in pairs(rargs) do
+                        devinfo[rc] = json.decode(rs)
+                    end
                 end
-                devinfo.pollList = pollList
-                devinfo.eventList = eventList
---]]                
                 table.insert( st.devices, devinfo )
+                luup.variable_set( MYSID, "int_da", "", k )
+                luup.variable_set( MYSID, "int_el", "", k )
+                luup.variable_set( MYSID, "int_pl", "", k )
             end
         end
         return json.encode( st ), "application/json"
