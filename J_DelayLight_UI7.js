@@ -679,7 +679,7 @@ var DelayLight = (function(api) {
             dataType: "json",
             timeout: 10000
         }).done( function( data, textStatus, jqXHR ) {
-            doSettings( myDevice, data.actors );
+            doSettings( myDevice, data );
         }).fail( function( jqXHR, textStatus, errorThrown ) {
             api.setCpanelContent("Luup did not respond; try again.");
         });
