@@ -1,10 +1,10 @@
 {
-	"default_icon": "http://www.toggledbits.com/delaylight/assets/delaylight-default.png",
+	"default_icon": "http://www.toggledbits.com/assets/delaylight/delaylight-default.png",
 	"state_icons": [{
-		"img": "http://www.toggledbits.com/delaylight/assets/delaylight-timing.png",
+		"img": "http://www.toggledbits.com/assets/delaylight/delaylight-timing.png",
 		"conditions": [{
 			"service": "urn:toggledbits-com:serviceId:DelayLight",
-			"variable": "OffTime",
+			"variable": "Timing",
 			"operator": "!=",
 			"value": "0"
 		}]
