@@ -41,7 +41,7 @@ Why separate on and off lists? Many of the rooms I control are presence-supervis
 and when I enter them at night, I usually only need one light to come on. The "on" list acts like a scene for that purpose: when
 a configured sensor trips, only the "on" list devices are turned on. The "off" list, then, allows me to specify all of the lights in the
 room, so that when the room later becomes unoccupied, I'm assured that *all* of the room's lights are turned off, not just the light that came
-on with motion. That also means that if any light in the room in turned on manually, a manual timing cycle is started.
+on with motion. That also means that if any light in the room is turned on manually, a manual timing cycle is started.
 
 ### Reboot/Reload Behavior ###
 
@@ -56,17 +56,17 @@ For sensors, DelayLight will allow any device that implements the `urn:micasaver
 typical motion and door sensors, many multi-sensors, and various plugins that emulate sensor behavior. DelayLight can be triggered by a 
 scene, if the user's needs extend beyond the native device handling.
 
-For devices, DelayLight will directly control any standard switch or dimmer (that is, devices that implement the SwitchPower1 and Dimming1 
-services). DelayLight will also allow the use of a scene as the on list or off list (or both), making it possible for DelayLight to control
-devices that do not implement these services. See cautions, below.
+For devices, DelayLight will directly control any standard switch or dimmer (that is, devices that implement the `urn:upnp-org:serviceId:SwitchPower1`
+and `urn:upnp-org:serviceId:Dimming1` services). DelayLight will also allow the use of a scene as the on list or off list (or both), 
+making it possible for DelayLight to control devices that do not implement these services. See cautions, below.
 
 ### Additional Features ###
 
 By default, DelayLight turns off the device on the off list when its timing period expires, regardless of sensor state.
 A "hold-over" can be configured, so that lights do not go out when a configured
-sensor is still tripped. When all sensors are reset, the off list is then applied. That is, turning lights off becomes the later of the
-timing cycle and the sensor states. In this way, for example, a motion sensor and a door sensor could be used to control lights in 
-a space, and while the sensor detects motion or the door remains open, the lights will remain on.
+sensor is still tripped. When all sensors are reset, the off list is then applied. 
+In this way, for example, a motion sensor and a door sensor could be used together to control lights in 
+a space, and while the sensor detects motion or the door remains open, the lights remain on.
 
 When a sensor triggers an automatic timing cycle, DelayLight's default behavior is to turn on the devices on the on list immediately.
 This can be delayed by setting an "on" delay--the on list devices are not turned on until the delay expires, and then the off delay
@@ -89,13 +89,58 @@ the use of a scene, but it cannot *detect state changes* for those devices. For 
 and DelayLight will run that scene and cause the mode change to occur, but spontaneously switching the thermostat to Economy outside of
 DelayLight will not trigger a manual timing cycle, as a light would if it were switched on manually.
 
+## Actions and Triggers ##
+
+DelayLight's service ID `urn:toggledbits.com:serviceId:DelayLight` provides the following triggers and actions:
+
+### Triggers ###
+
+#### Timing Change ####
+
+The Timing Change trigger signals the start or end of a timing cycle. 
+
+#### Mode Change ####
+
+The Mode Change trigger is a more detailed version of the Timing Change trigger, providing notification of automatic or manual timing, or reset to idle.
+
+#### Enabled State ####
+
+The Enabled State trigger signals that a DelayLight device has been enabled or disabled.
+
+### Actions ###
+
+#### Trigger ####
+
+The Trigger action, which takes no parameters, starts an automatic timing cycle. Devices on the "on" list are turned on.
+
+<code>
+    luup.call_action( "urn:toggledbits.com:serviceId:DelayLight", "Trigger", { }, deviceNum )
+</code>
+
+#### Reset ####
+
+The Reset action, which takes no parameters, terminates a timing cycle. All devices on the "off" list are turned off.
+
+<code>
+    luup.call_action( "urn:toggledbits.com:serviceId:DelayLight", "Reset", { }, deviceNum )
+</code>
+
+#### SetEnabled ####
+
+The SetEnabled action takes a single parameter, `newEnabledValue`, and enables or disables the DelayLight device. The value must be 0 or 1 only.
+When disabled, the DelayLight device will complete any in-progress timing cycle and go to idle state. It cannot be triggered thereafter.
+
+<code>
+    luup.call_action( "urn:toggledbits.com:serviceId:DelayLight", "SetEnabled", { newEnabledValue="1" }, deviceNum )
+</code>
+
 ## Future Thoughts ##
 
 Although I'm trying to keep this plugin in the realm of the simple, I can see that some extensions are necessary. If you have a suggestion,
 feel free to make it. Here's what I'm thinking about at the moment:
 
 * Rather than being limited to the SecuritySensor1 service for triggers, allow any event-driven state for any device to be a trigger. This would allow, for example, my theater to inhibit reset while the AV system is on (i.e. we're watching a movie).
-* More direct control/tracking for specific devices. I've already made two passes at this, and backed off. Both worked, but I didn't feel I had enough knowledge about how *other people* would use this plugin to have a good feel for the extent I needed to take this. In the first implementation, I used Vera's static JSON data to provide clues about the behavior and capabilities of devices, but I was concerned that I didn't have a good enough understanding and sampling of all of the various interpretations out there for what static data could contain (it has evolved over the years, and varies widely between plugin authors). The second implementation uses a custom device description file that is sourced from my Amazon cloud. I like this, because it lets me quickly add functionality by revising the file, but I'm also hesitant because I don't yet feel I've thought through all of the scenarios for changes, especially changes that could potentially break running configurations (e.g. renaming a state or condition due to error, conflict, or just spelling). All code is preserved, and I'm continuing to self-debate the merits and weaknesses of these approaches.
+* More direct control/tracking for specific devices. I've already made two passes at this, and backed off. Both worked, but I didn't feel I had enough knowledge about how *other people* would use this plugin to have a good feel for the extent I needed to take this. In the first implementation, I used Vera's static JSON data to provide clues about the behavior and capabilities of devices, but I was concerned that I didn't have a good enough understanding and sampling of all of the various interpretations out there for what static data could contain (it has evolved over the years, and varies widely between plugin authors), so the handling of unexpected or missing values needs to be extensive. The second implementation uses a custom device description file (web-updateable) to address the consistency issue. This also would let me quickly add or fix functionality by revising the file rather than the plugin, but I'm also hesitant because I don't yet feel I've thought through all of the scenarios for changes, especially changes that could potentially break running configurations (e.g. renaming a state or condition due to error, conflict, or just spelling). All code is preserved, and I'm continuing to self-debate the merits and weaknesses of these approaches.
 
 ## License ##
 
