@@ -34,8 +34,9 @@ when used in conjunction with a motion sensor, it will, for example, turn on one
 has been detected, turn them off.
 
 A separate manual timing delay is possible by activating one of the controlled lights manually. If DelayLight is not already in a timing
-cycle, it starts a *manual* timing cycle. A trip of a configured sensor or a change to another controlled light will cause the timing
-delay to be extended. At the end of the timing delay, all devices on the off list are turned off.
+cycle, it starts a *manual* timing cycle, but does *not* turn on the "on" list devices.
+During manual timing, a trip of a configured sensor or a change to another controlled light will cause the timing
+to be extended. At the end of timing, all devices on the off list are turned off.
 
 Why separate on and off lists? Many of the rooms I control are presence-supervised with motion sensors. These rooms have a lot of lights,
 and when I enter them at night, I usually only need one light to come on. The "on" list acts like a scene for that purpose: when
@@ -128,7 +129,7 @@ The Reset action, which takes no parameters, terminates a timing cycle. All devi
 #### SetEnabled ####
 
 The SetEnabled action takes a single parameter, `newEnabledValue`, and enables or disables the DelayLight device. The value must be 0 or 1 only.
-When disabled, the DelayLight device will complete any in-progress timing cycle and go to idle state. It cannot be triggered thereafter.
+When disabled, the DelayLight device will complete any in-progress timing cycle and go to idle state. It cannot be triggered until re-enabled.
 
 <code>
     luup.call_action( "urn:toggledbits.com:serviceId:DelayLight", "SetEnabled", { newEnabledValue="1" }, deviceNum )
@@ -139,8 +140,8 @@ When disabled, the DelayLight device will complete any in-progress timing cycle 
 Although I'm trying to keep this plugin in the realm of the simple, I can see that some extensions are necessary. If you have a suggestion,
 feel free to make it. Here's what I'm thinking about at the moment:
 
-* Rather than being limited to the SecuritySensor1 service for triggers, allow any event-driven state for any device to be a trigger. This would allow, for example, my theater to inhibit reset while the AV system is on (i.e. we're watching a movie).
-* More direct control/tracking for specific devices. I've already made two passes at this, and backed off. Both worked, but I didn't feel I had enough knowledge about how *other people* would use this plugin to have a good feel for the extent I needed to take this. In the first implementation, I used Vera's static JSON data to provide clues about the behavior and capabilities of devices, but I was concerned that I didn't have a good enough understanding and sampling of all of the various interpretations out there for what static data could contain (it has evolved over the years, and varies widely between plugin authors), so the handling of unexpected or missing values needs to be extensive. The second implementation uses a custom device description file (web-updateable) to address the consistency issue. This also would let me quickly add or fix functionality by revising the file rather than the plugin, but I'm also hesitant because I don't yet feel I've thought through all of the scenarios for changes, especially changes that could potentially break running configurations (e.g. renaming a state or condition due to error, conflict, or just spelling). All code is preserved, and I'm continuing to self-debate the merits and weaknesses of these approaches.
+* Rather than being limited to the SecuritySensor1 service for triggers, allow any event-driven state for any device to be a trigger. This would allow, for example, my theater to inhibit reset while the AV system is on (i.e. lights don't change while we're watching a movie).
+* The natural extension of the above is more direct control/tracking for all devices, or as many as possible. I've already made two passes at this, and backed off. Both worked, but I didn't feel I had enough knowledge about how *other people* would use this plugin to have a good feel for the extent I needed to take this. In the first implementation, I used Vera's static JSON data to provide clues about the behavior and capabilities of devices, but I was concerned that I didn't have a good enough understanding and sampling of all of the various interpretations out there for what static data could contain (it has evolved over the years, and varies widely between plugin authors), so the handling of unexpected or missing values needs to be extensive. The second implementation uses a custom device description file (web-updateable) to address the consistency issue. This also would let me quickly add or fix functionality by revising the file rather than the plugin, but I'm also hesitant because I don't yet feel I've thought through all of the scenarios for changes, especially changes that could potentially break running configurations (e.g. renaming a state or condition due to error, conflict, or just spelling). All code is preserved, and I'm continuing to self-debate the merits and weaknesses of these approaches.
 
 ## License ##
 
