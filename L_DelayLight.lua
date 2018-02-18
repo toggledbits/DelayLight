@@ -969,6 +969,18 @@ function start( pdev )
     return true, "Ready", _PLUGIN_NAME
 end
 
+-- Find a good tick delay for next update
+local function scaleNextTick( delay )
+    delay = tonumber( delay, 10 ) or 60
+    local nextTick = delay
+    if delay > 60 then nextTick = 60
+    elseif delay > 10 then nextTick = 5
+    else nextTick = 1 end
+    local remain = delay % nextTick
+    if remain > 0 then nextTick = remain end
+    return nextTick
+end
+
 function trigger( state, pdev )
     D("trigger(%1,%2)", state, pdev)
 
@@ -991,7 +1003,6 @@ function trigger( state, pdev )
             end
             offDelay = getVarNumeric( "AutoDelay", 60, pdev )
             if offDelay == 0 then return end -- 0 delay means no auto-on function
-            if offDelay < nextTick then nextTick = offDelay end
             onDelay = getVarNumeric( "OnDelay", 0, pdev )
             if onDelay == 0 then
                 luup.variable_set( MYSID, "OnTime", 0, pdev )
@@ -1004,14 +1015,13 @@ function trigger( state, pdev )
         else
             -- Trigger manual
             offDelay = getVarNumeric( "ManualDelay", 3600, pdev )
-            if offDelay < nextTick then nextTick = offDelay end
             luup.variable_set( MYSID, "OnTime", 0, pdev )
         end
         luup.variable_set( MYSID, "OffTime", os.time() + onDelay + offDelay, pdev )
         luup.variable_set( MYSID, "Status", state, pdev )
         luup.variable_set( MYSID, "Timing", 1, luup.device )
         runStamp = runStamp + 1
-        luup.call_delay( "delayLightTick", nextTick, runStamp .. ":" .. pdev )
+        luup.call_delay( "delayLightTick", scaleNextTick( onDelay + offDelay ), runStamp .. ":" .. pdev )
     else
         -- Trigger in man or auto is REtrigger; extend timing by current mode's delay
         if status == STATE_AUTO then
@@ -1079,16 +1089,6 @@ function getinfo( pdev )
     luup.variable_set( MYSID, "int_da", json.encode(deviceActions), pdev )
     luup.variable_set( MYSID, "int_el", json.encode(eventList), pdev )
     luup.variable_set( MYSID, "int_pl", json.encode(pollList), pdev )
-end
-
-local function scaleNextTick( delay )
-    local nextTick = tonumber( delay, 10 ) or 60
-    if delay > 60 then nextTick = 60
-    elseif delay > 10 then nextTick = 5
-    else nextTick = 1 end
-    local remain = delay % nextTick
-    if remain > 0 then nextTick = remain end
-    return nextTick
 end
 
 -- Timer tick
@@ -1294,7 +1294,10 @@ function watch( dev, sid, var, oldVal, newVal )
             local trig = isDeviceOn( dev, dinfo, newVal, luup.device )
             D("watch() device %1 trigger state is %2", dev, trig)
             
-            addEvent{ event="watch", device=dev, service=sid, variable=var, old=oldVal, new=newVal, when=os.time() }
+            addEvent{ event="watch", device=dev, service=sid, variable=var, old=oldVal, new=newVal, triggered=trig }
+            
+            -- We respond to edges. The value has to change for us to actually care...
+            if oldVal == newVal then return end
             
             -- Now...
             if trig then
@@ -1303,6 +1306,7 @@ function watch( dev, sid, var, oldVal, newVal )
                 -- And evaluate
                 if status == STATE_AUTO and dinfo.type == "load" and dinfo.list == "on" then
                     -- "OnList" load turning on while in auto--that's probably us doing it, so ignore.
+                    return
                 else
                     -- Trigger for type
                     D("watch() triggering %1 for %2", dinfo.trigger, dev)
