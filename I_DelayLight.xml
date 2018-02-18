@@ -63,5 +63,13 @@
                 return true
             </run>
         </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:DelayLight</serviceId>
+            <name>getinfo</name>
+            <run>
+                DelayLight.getinfo( lul_device )
+                return true
+            </run>
+        </action>
     </actionList>
 </implementation>

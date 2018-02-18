@@ -12,7 +12,7 @@
             <shortCode>status</shortCode>
         </stateVariable>
         <stateVariable sendEvents="yes">
-            <name>Offtime</name>
+            <name>OffTime</name>
             <dataType>ui4</dataType>
             <defaultValue>0</defaultValue>
             <shortCode>offtime</shortCode>
@@ -67,6 +67,26 @@
                 <argument>
                     <name>debug</name>
                     <direction>in</direction>
+                </argument>
+            </argumentList>
+        </action>
+        <action>
+            <name>getinfo</name>
+            <argumentList>
+                <argument>
+                    <name>deviceActions</name>
+                    <direction>out</direction>
+                    <relatedStateVariable>int_da</relatedStateVariable>
+                </argument>
+                <argument>
+                    <name>eventList</name>
+                    <direction>out</direction>
+                    <relatedStateVariable>int_el</relatedStateVariable>
+                </argument>
+                <argument>
+                    <name>pollList</name>
+                    <direction>out</direction>
+                    <relatedStateVariable>int_pl</relatedStateVariable>
                 </argument>
             </argumentList>
         </action>
