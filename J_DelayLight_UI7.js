@@ -548,7 +548,7 @@ var DelayLight = (function(api) {
             html += '<div class="clearfix">';
             
             html += '<div id="tbbegging"><em>Find DelayLight useful?</em> Please consider a small one-time donation, or $1 monthly pledge, to support this and my other plugins on <a href="https://www.makersupport.com/toggledbits" target="_blank">MakerSupport.com</a>. I am grateful for any support you choose to give!</div>';
-            html += '<div id="tbcopyright">DelayLight ver 0.2dev &copy; 2016,2017,2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. For documentation and license, please see this project\'s <a href="https://github.com/toggledbits" target="_blank">GitHub repository</a>.</div>';
+            html += '<div id="tbcopyright">DelayLight ver 1.0 &copy; 2016,2017,2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. For documentation and license, please see this project\'s <a href="https://github.com/toggledbits/DelayLight" target="_blank">GitHub repository</a>.</div>';
 
             // Push generated HTML to page
             api.setCpanelContent(html);
