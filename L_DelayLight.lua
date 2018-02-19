@@ -447,7 +447,7 @@ local function loadTriggerMapFromScene( scene, list, pdev )
             triggerMap[deviceNum] = { trigger=STATE_MANUAL, invert=false, ['type']="load", list=list }
         else
             -- Is it a configurable device?
-            local name = findDeviceActor( deviceNum, nil, pev )
+            local name = findDeviceActor( deviceNum, nil, pdev )
             if name ~= nil then
                 -- If there's an actor for it, just put it on the targetMap. The loop
                 -- that sets the watches will sort the rest of the initializations out.
@@ -717,7 +717,7 @@ local function checkPoll( lp, pdev )
     end
     -- Poll one device per check
     if #pollList > 0 then
-        devnum = table.remove(pollList, 1)
+        local devnum = table.remove(pollList, 1)
         D("checkPoll() forcing poll on overdue device %1 (%2)", devnum, luup.devices[devnum].description)
         luup.call_action( "urn:micasaverde-com:serviceId:HaDevice1", "Poll", {}, devnum)
         luup.variable_set( MYSID, "LastPoll", now, pdev )
