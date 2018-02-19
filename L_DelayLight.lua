@@ -43,10 +43,10 @@ if json == nil then luup.log(_PLUGIN_NAME .. " cannot load JSON library, exiting
 
 local function dump(t)
     if t == nil then return "nil" end
-    local k,v,str,val
     local sep = ""
     local str = "{ "
     for k,v in pairs(t) do
+        local val
         if type(v) == "table" then
             val = dump(v)
         elseif type(v) == "function" then
@@ -146,17 +146,6 @@ local function split(s, sep)
     return t, n
 end
 
--- Merge two arrays. They specifically must be arrays, not maps. Duplicate values are removed.
-local function arrayMerge( a, b )
-    local t = {}
-    local v
-    for _,v in pairs(a) do t[v]=1 end
-    for _,v in pairs(b) do t[v]=1 end
-    local r = {}
-    for v,_ in pairs(t) do table.insert(r, v) end
-    return r
-end
-
 -- Create a map from an array a. Iterate over a and call function f, which must return a key and a value pair.
 -- This key/value pair is added to the result map. If a value is not returned, true is assumed. If a key is
 -- not returned, the array element is skipped (nothing is placed in the map for it). If overwrite is false,
@@ -164,7 +153,7 @@ end
 local function map( a, f, r, overwrite )
     if r == nil then r = {} end
     if overwrite == nil then overwrite = true end
-    local ix,val,k,v
+    local k,v
     for ix,val in ipairs(a) do
         if f ~= nil then
             -- Map function returns new key and value to be inserted. k=nil means don't insert.
@@ -187,7 +176,6 @@ end
 -- Shallow copy
 local function shallowCopy( t )
     local r = {}
-    local k,v
     for k,v in pairs(t) do
         r[k] = v
     end
@@ -233,7 +221,7 @@ local function deleteVar( sid, name, devid )
     -- could have been used to delete variables, since a later get would yield nil anyway. But it turns out
     -- that using the variableset Luup request with no value WILL delete the variable.
     local sue = sid:gsub("([^%w])", function( c ) return string.format("%%%02x", string.byte(c)) end)
-    local req = "http://127.0.0.1/port_3480/data_request?id=variableset&DeviceNum=" .. tostring(devid) .. "&serviceId=" .. sid .. "&Variable=" .. name .. "&Value="
+    local req = "http://127.0.0.1/port_3480/data_request?id=variableset&DeviceNum=" .. tostring(devid) .. "&serviceId=" .. sue .. "&Variable=" .. name .. "&Value="
     local status, result = luup.inet.wget(req)
     D("deleteVar(%1,%2) status=%3, result=%4", name, devid, status, result)
 end
@@ -386,7 +374,6 @@ end
 
 -- Set up watches for triggers (if they aren't already watched)
 local function watchTriggers( pdev )
-    local nn
     for nn, ix in pairs( triggerMap ) do
         if luup.devices[nn] == nil then
             L("Device %1 not found... it may have been deleted!")
@@ -451,8 +438,7 @@ local function loadTriggerMapFromScene( scene, list, pdev )
         return false 
     end
     D("loadTriggerMapFromScene() examining devices in first scene group")
-    local k,ac
-    for k,ac in pairs(scd.groups[1].actions) do
+    for _,ac in pairs(scd.groups[1].actions) do
         local deviceNum = tonumber(ac.device,10)
         if not luup.devices[deviceNum] then
             L("Device %1 used in scene %2 (%3) not found in luup.devices. Maybe it got deleted? Skipping.", deviceNum, scd.id, scd.description)
@@ -461,7 +447,7 @@ local function loadTriggerMapFromScene( scene, list, pdev )
             triggerMap[deviceNum] = { trigger=STATE_MANUAL, invert=false, ['type']="load", list=list }
         else
             -- Is it a configurable device?
-            local name, actor = findDeviceActor( deviceNum, nil, pev )
+            local name = findDeviceActor( deviceNum, nil, pev )
             if name ~= nil then
                 -- If there's an actor for it, just put it on the targetMap. The loop
                 -- that sets the watches will sort the rest of the initializations out.
@@ -489,7 +475,6 @@ local function doDeviceAction( actorName, actor, target, state, vtDev )
     local selector = iff( state, "on", "off" )
     if actor.states ~= nil and actor.states[selector] ~= nil then
         local methods = actor.states[selector].method
-        local mn, mm
         for mn,mm in pairs(methods) do
             if type(mm) ~= "table" then
                 L({level=2,msg="Malformed method %1 ignored in actor %2 state %3: %4"}, mm.name or mn, actorName, selector, mm)
@@ -544,7 +529,7 @@ local function deviceOnOff( targetDevice, state, vtDev )
         -- Scene reference starts with S
         local sceneId = tonumber(string.sub(targetDevice, 2),10)
         D("deviceOnOff() running scene %1", sceneId)
-        local rc,rs,job,ra = luup.call_action("urn:micasaverde-com:serviceId:HomeAutomationGateway1", "RunScene", {SceneNum = sceneId}, 0)
+        local rc,rs = luup.call_action("urn:micasaverde-com:serviceId:HomeAutomationGateway1", "RunScene", {SceneNum = sceneId}, 0)
         if rc ~= 0 then L({level=2,msg="Scene run failed, result %1, %2"}, rc, rs ) end
     else
         -- Controlled load (hopefully).
@@ -615,8 +600,7 @@ local function doLightsOff( pdev )
     assert( pdev ~= nil )
     L("Turning off lights.")
     local devList = split( luup.variable_get( MYSID, "OffList", pdev ) or "" )
-    local ix, devSpec
-    for ix, devSpec in ipairs(devList) do
+    for _, devSpec in ipairs(devList) do
         deviceOnOff( devSpec, false, pdev )
     end
 end
@@ -626,8 +610,7 @@ local function doLightsOn( pdev )
     assert( pdev ~= nil )
     L("Turning lights on.")
     local devList = split( luup.variable_get( MYSID, "OnList", pdev ) or "" )
-    local ix, devSpec
-    for ix, devSpec in ipairs(devList) do
+    for _, devSpec in ipairs(devList) do
         deviceOnOff( devSpec, true, pdev )
     end
 end
@@ -649,7 +632,6 @@ local function isDeviceOn( devnum, dinfo, newVal, pdev )
     -- For inequality, invert the inverted state :-)
     if dinfo.comparison == '<>' or dinfo.comparison == "~=" or dinfo.comparison == "!=" then inv = not inv end
     D("isDeviceOn() testing %1 val %2 against %3", devnum, newVal, testValues)
-    local isOn, tv = false
     for _,tv in ipairs( testValues ) do
         if iff( inv, newVal ~= tostring( tv ), newVal == tostring( tv ) ) then
             return true
@@ -663,7 +645,6 @@ local function isAnyTriggerOn( includeSensors, includeLoads, pdev )
     assert( type(includeSensors) == "boolean" )
     assert( type(includeLoads) == "boolean" )
     assert( pdev ~= nil )
-    local devnum, dinfo
     for devnum,dinfo in pairs(triggerMap) do
         if luup.devices[devnum] ~= nil and luup.is_ready(devnum) then
             local doCheck = ( includeSensors and dinfo.type == "trigger" ) or ( includeLoads and dinfo.type == "load" )
@@ -692,7 +673,6 @@ end
 -- Return whether item is on list (table as array)
 local function isOnList( l, e )
     if l == nil or e == nil then return false end
-    local n,v
     for n,v in ipairs(l) do
         if v == e then return true, n end
     end
@@ -706,7 +686,6 @@ local function isActiveHouseMode( dev )
     local activeList,n = split( luup.variable_get( MYSID, "HouseModes", dev ) or "", "," )
     D("isActiveHouseMode() checking current mode %1 against active modes %2", mode, activeList )
     if n == 0 then return true end -- no modes is all modes
-    local t
     for _,t in ipairs( activeList ) do
         if t == mode then return true end
     end
@@ -718,8 +697,7 @@ end
 local function checkPoll( lp, pdev )
     L("Polling devices...")
     local now = os.time()
-    local devnum,dinfo
-    for devnum,dinfo in pairs(triggerMap) do
+    for devnum in pairs(triggerMap) do
         if luup.devices[devnum] ~= nil and luup.device_supports_service("urn:micasaverde-com:serviceId:ZWaveDevice1", devnum) and not isOnList( pollList, devnum ) then
             local pp = getVarNumeric( "PollSettings", 900, devnum, "urn:micasaverde-com:serviceId:ZWaveDevice1" )
             if pp ~= 0  then
@@ -871,7 +849,6 @@ function start( pdev )
     eventList = {}
 
     -- Check for ALTUI and OpenLuup
-    local k,v
     for k,v in pairs(luup.devices) do
         if v.device_type == "urn:schemas-upnp-org:device:altui:1" then
             local rc,rs,jj,ra
@@ -903,8 +880,8 @@ function start( pdev )
     runOnce( pdev )
     
     -- Load device-specific actions
-    local status, err = pcall( loadDeviceActions, pdev )
-    if not status then
+    local ok, err = pcall( loadDeviceActions, pdev )
+    if not ok then
         L({level=2,msg="Failed to load device actions: %1"}, err)
     end
 
@@ -991,7 +968,6 @@ function trigger( state, pdev )
     
     local offDelay
     local status = luup.variable_get( MYSID, "Status", pdev )
-    local nextTick = 5
     local onDelay = 0
     if status == STATE_IDLE then
         -- Trigger from idle state
@@ -1009,7 +985,6 @@ function trigger( state, pdev )
                 doLightsOn( pdev )
             else
                 luup.variable_set( MYSID, "OnTime", os.time() + onDelay, pdev )
-                if onDelay < nextTick then nextTick = onDelay end
                 D("trigger() configuring on delay %1 seconds", onDelay)
             end
         else
@@ -1024,6 +999,7 @@ function trigger( state, pdev )
         luup.call_delay( "delayLightTick", scaleNextTick( onDelay + offDelay ), runStamp .. ":" .. pdev )
     else
         -- Trigger in man or auto is REtrigger; extend timing by current mode's delay
+        local delay
         if status == STATE_AUTO then
             if not isActiveHouseMode( pdev ) then
                 D("trigger() not in active house mode, not re-triggering/extending");
@@ -1153,7 +1129,6 @@ function tick(p)
 
     if nextTick >= 5 then
         -- Attempt to load any unloaded scenes.
-        local scene
         for scene in pairs( sceneWaiting ) do
             local n = tonumber(scene)
             if n ~= nil then
@@ -1238,17 +1213,19 @@ function request( lul_request, lul_parameters, lul_outputformat )
             },            
             devices={}
         }
-        local k,v
         for k,v in pairs( luup.devices ) do
             if v.device_type == MYTYPE then
-                devinfo = getDevice( k, luup.device, v ) or {}
+                local devinfo = getDevice( k, luup.device, v ) or {}
                 -- Blech. The only way to return data from a specific instance is to use
                 -- an action, and have it return state variable contents. Egad. Why Vera? Why?
                 local rc,rs,job,rargs = luup.call_action( MYSID, "getinfo", {}, k )
                 if rc == 0 then
-                    for rc,rs in pairs(rargs) do
-                        devinfo[rc] = json.decode(rs)
+                    for rn,rv in pairs(rargs) do
+                        devinfo[rn] = json.decode(rv)
                     end
+                else
+                    devinfo["__comment_getinfo"] = string.format("getinfo action returned %s, %s, %s, %s",
+                        tostring(rc), tostring(rs), tostring(job), dump(rargs))
                 end
                 table.insert( st.devices, devinfo )
                 luup.variable_set( MYSID, "int_da", "", k )
