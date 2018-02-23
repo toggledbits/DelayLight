@@ -788,43 +788,7 @@ local function runOnce( pdev )
     end
 
     -- Consider per-version changes.
-    if (s < 00101) then
-        L("Updating configuration (101)...")
-        luup.variable_set( MYSID, "Triggers", luup.variable_get( MYSID, "Sensors", pdev ) or "", pdev )
-        luup.variable_set( MYSID, "OnList", luup.variable_get( MYSID, "Devices", pdev ) or "", pdev )
-        luup.variable_set( MYSID, "OffList", luup.variable_get( MYSID, "AuxDevices", pdev ) or "", pdev )
-        deleteVar( MYSID, "Triggers", pdev )
-        deleteVar( MYSID, "Devices", pdev )
-        deleteVar( MYSID, "AuxDevices", pdev )
-        deleteVar(SWITCH_SID, "Status", pdev)
-        deleteVar(SWITCH_SID, "Target", pdev)
-    end
-    if (s < 00102) then
-        L("Updating configuration (102)...")
-        luup.variable_set( MYSID, "Triggers", luup.variable_get( MYSID, "Sensors", pdev ) or "", pdev )
-        deleteVar( MYSID, "Sensors", pdev )
-    end
-    if (s < 00103) then
-        L("Updating configuration (103)...")
-        luup.variable_set( MYSID, "ForcePoll", "0", pdev )
-    end
-    if s < 00104 then
-        L("Updating configuration (104)...")
-        luup.variable_set( MYSID, "OnDelay", 0, pdev )
-        luup.variable_set( MYSID, "OnTime", 0, pdev )
-        luup.variable_set( MYSID, "HoldOn", 0, pdev )
-    end
-    if s < 00105 then
-        luup.variable_set( MYSID, "LastTrigger", "", pdev )
-        deleteVar( MYSID, "LastLoad", pdev )
-        deleteVar( MYSID, "LastSensor", pdev )
-    end
-    if s < 00106 then
-        luup.variable_set( MYSID, "HouseModes", "", pdev )
-    end
-    if s < 00107 then
-        luup.variable_set( MYSID, "Enabled", "1", pdev )
-    end
+    -- None at the moment.
 
     -- Update version last.
     if (s ~= _CONFIGVERSION) then
