@@ -10,7 +10,7 @@
 module("L_DelayLight", package.seeall)
 
 local _PLUGIN_NAME = "DelayLight"
-local _PLUGIN_VERSION = "1.0"
+local _PLUGIN_VERSION = "1.1"
 local _CONFIGVERSION = 00107
 
 local MYSID = "urn:toggledbits-com:serviceId:DelayLight"
