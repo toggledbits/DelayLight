@@ -13,7 +13,7 @@
             delayLightWatch = DelayLight.watch
             delayLightRequestHandler = DelayLight.request
             luup.register_handler("delayLightRequestHandler", "DelayLight")
-            return DelayLight.start(devNum)
+            return DelayLight.startPlugin(devNum)
         end
     </functions>
     <startup>startupDelayLight</startup>
