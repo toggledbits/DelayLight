@@ -627,6 +627,7 @@ local function timer_runOnce( tdev )
             luup.variable_set( MYSID, "Enabled", 0, old )
             luup.variable_set( TIMERSID, "OldDevice", "", tdev )
             -- deleteVar( TIMERSID, "OldDevice", tdev )
+            luup.attr_set( "room", luup.attr_get( "room", old ) or 0, tdev )
         else
             luup.variable_set( TIMERSID, "Enabled", "1", tdev )
             luup.variable_set( TIMERSID, "Status", STATE_IDLE, tdev )
