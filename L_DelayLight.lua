@@ -209,7 +209,7 @@ local function addEvent( t )
     p.when = os.time()
     p.time = os.date("%Y%m%dT%H%M%S")
     table.insert( eventList, p )
-    if #t > 25 then table.remove(1) end
+    if #eventList > 25 then table.remove(eventList, 1) end
 end
 
 -- Enabled?
