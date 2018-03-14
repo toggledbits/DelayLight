@@ -3,7 +3,7 @@
 	"state_icons": [{
 		"img": "http://www.toggledbits.com/assets/delaylight/delaylight-timing.png",
 		"conditions": [{
-			"service": "urn:toggledbits-com:serviceId:DelayLight",
+			"service": "urn:toggledbits-com:serviceId:DelayLightTimer",
 			"variable": "Timing",
 			"operator": "!=",
 			"value": "0"
@@ -72,12 +72,12 @@
 						"Left": 50,
 						"Width": 75,
 						"Height": 20,
-						"Service": "urn:toggledbits-com:serviceId:DelayLight",
+						"Service": "urn:toggledbits-com:serviceId:DelayLightTimer",
 						"Variable": "Status",
 						"Value": "idle"
 					},
 					"Command": {
-						"Service": "urn:toggledbits-com:serviceId:DelayLight",
+						"Service": "urn:toggledbits-com:serviceId:DelayLightTimer",
 						"Action": "Reset",
 						"Parameters": []
 					},
@@ -99,7 +99,7 @@
 						"Height": 20
 					},
 					"Command": {
-						"Service": "urn:toggledbits-com:serviceId:DelayLight",
+						"Service": "urn:toggledbits-com:serviceId:DelayLightTimer",
 						"Action": "Trigger",
 						"Parameters": []
 					},
@@ -122,12 +122,12 @@
 								"text": "Enabled"
 							},
 							"Display": {
-								"Service": "urn:toggledbits-com:serviceId:DelayLight",
+								"Service": "urn:toggledbits-com:serviceId:DelayLightTimer",
 								"Variable": "Enabled",
 								"Value": "1"
 							},
 							"Command": {
-								"Service": "urn:toggledbits-com:serviceId:DelayLight",
+								"Service": "urn:toggledbits-com:serviceId:DelayLightTimer",
 								"Action": "SetEnabled",
 								"Parameters": [{
 									"Name": "newEnabledValue",
@@ -142,12 +142,12 @@
 								"text": "Disabled"
 							},
 							"Display": {
-								"Service": "urn:toggledbits-com:serviceId:DelayLight",
+								"Service": "urn:toggledbits-com:serviceId:DelayLightTimer",
 								"Variable": "Enabled",
 								"Value": "0"
 							},
 							"Command": {
-								"Service": "urn:toggledbits-com:serviceId:DelayLight",
+								"Service": "urn:toggledbits-com:serviceId:DelayLightTimer",
 								"Action": "SetEnabled",
 								"Parameters": [{
 									"Name": "newEnabledValue",
@@ -168,7 +168,7 @@
 						"Left": 60,
 						"Width": 240,
 						"Height": 25,
-						"Service": "urn:toggledbits-com:serviceId:DelayLight",
+						"Service": "urn:toggledbits-com:serviceId:DelayLightTimer",
 						"Variable": "Message"
 					},
 					"ControlCode": "message"
@@ -177,13 +177,13 @@
 		},
 		{
 			"Label": {
-				"lang_tag": "tb_delaylight_settings",
+				"lang_tag": "tb_delaylighttimer_settings",
 				"text": "Settings"
 			},
 			"Position": "1",
 			"TabType": "javascript",
-			"ScriptName": "J_DelayLight_UI7.js",
-			"Function": "DelayLight.doSettings"
+			"ScriptName": "J_DelayLightTimer_UI7.js",
+			"Function": "DelayLightTimer.doSettings"
 		},
 		{
 			"Label": {
@@ -233,7 +233,7 @@
                 "lang_tag": "tb_mode_changes",
                 "text": "Mode Changes"
             },
-            "serviceId": "urn:toggledbits-com:serviceId:DelayLight",
+            "serviceId": "urn:toggledbits-com:serviceId:DelayLightTimer",
             "argumentList": [{
                 "id": 1,
                 "name": "Status",
@@ -275,7 +275,7 @@
                 "lang_tag": "tb_runstate_changes",
                 "text": "Timing State Changes"
             },
-            "serviceId": "urn:toggledbits-com:serviceId:DelayLight",
+            "serviceId": "urn:toggledbits-com:serviceId:DelayLightTimer",
             "argumentList": [{
                 "id": 1,
                 "name": "Timing",
@@ -310,7 +310,7 @@
                 "lang_tag": "tb_opstate_changes",
                 "text": "Enabled State Changes"
             },
-            "serviceId": "urn:toggledbits-com:serviceId:DelayLight",
+            "serviceId": "urn:toggledbits-com:serviceId:DelayLightTimer",
             "argumentList": [{
                 "id": 1,
                 "name": "Enabled",

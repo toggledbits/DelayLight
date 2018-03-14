@@ -7,11 +7,11 @@
     <device>
         <deviceType>urn:schemas-toggledbits-com:device:DelayLightTimer:1</deviceType>
         <staticJson>D_DelayLightTimer_UI7.json</staticJson>
-        <friendlyName>DelayLightTimer</friendlyName>
+        <friendlyName>DelayLight Timer</friendlyName>
         <manufacturer>rigpapa</manufacturer>
         <manufacturerURL>http://www.toggledbits.com/delaylight/</manufacturerURL>
         <modelDescription></modelDescription>
-        <modelName>DelayLightTimer</modelName>
+        <modelName>DelayLight Timer</modelName>
         <handleChildren>0</handleChildren>
         <Category_Num>1</Category_Num>
         <serviceList>

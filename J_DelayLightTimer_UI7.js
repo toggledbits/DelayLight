@@ -1,23 +1,24 @@
-//# sourceURL=J_DelayLight_UI7.js
+//# sourceURL=J_DelayLightTimer_UI7.js
 /**
- * J_DelayLight_UI7.js
- * Configuration interface for DelayLight
+ * J_DelayLightTimer_UI7.js
+ * Configuration interface for DelayLightTimer
  *
  * Copyright 2016,2017,2018 Patrick H. Rigney, All Rights Reserved.
  * This file is part of DelayLight. For license information, see LICENSE at https://github.com/toggledbits/DelayLight
  */
+/* globals api,jQuery,$,jsonp */
 
 //"use strict"; // fails on UI7, works fine with ALTUI
 
-var DelayLight = (function(api) {
+var DelayLightTimer = (function(api) {
 
     // unique identifier for this plugin...
     var uuid = '28017722-1101-11e8-9e9e-74d4351650de';
 
     var myModule = {};
 
-    var serviceId = "urn:toggledbits-com:serviceId:DelayLight";
-    var deviceType = "urn:schemas-toggledbits-com:device:DelayLight:1";
+    var serviceId = "urn:toggledbits-com:serviceId:DelayLightTimer";
+    var deviceType = "urn:schemas-toggledbits-com:device:DelayLightTimer:1";
     
     var deviceByNumber = [];
     var devCap = {};
@@ -63,7 +64,7 @@ var DelayLight = (function(api) {
                     console.log(jqXHR.responseText);
                 });
             }
-        })
+        });
     }
     
     function updateTriggers() {
@@ -197,29 +198,6 @@ var DelayLight = (function(api) {
         jQuery(ev.currentTarget).addClass("tberror");
     }
     
-    function deviceOptions( lbl, elemId, rooms, filterFunc ) {
-        var myDevice = api.getCpanelDeviceId();
-        var html = '<div>';
-        html += '<label class="col-xs-2" for="' + elemId + '">' + lbl + '</label> ';
-        html += '<select id="' + elemId + '"><option value="">(none/not used)</option>';
-        rooms.forEach( function(room) {
-            var first = true;
-            if (room.devices) {
-                room.devices.forEach( function(dev) {
-                    if ( dev.id != myDevice && filterFunc( dev.id, dev ) ) {
-                        if (first)
-                            html += "<option disabled>--" + room.name + "--</option>";
-                        first = false;
-                        html += '<option value="' + dev.id + '">' + dev.friendlyName + '</option>';
-                    }
-                });
-            }
-        });
-        html += '</select>';
-        html += '</div>';
-        return html;
-    }
-
     /* Return true if device implements requested service */
     function deviceImplements( devobj, service ) {
         if ( undefined === devobj ) { return false; }
@@ -251,45 +229,11 @@ var DelayLight = (function(api) {
             ;
     }
     
-    function findActor( devObj ) {
-        if ( devCap.__cache && devCap.__cache[devObj.id] ) {
-            return { name: devCap.__cache[devObj.id], actor: devCap[devCap.__cache[devObj.id]] };
-        }
-        
-        var name, actor;
-        name = "description=" + devObj.name;
-        if ( devCap[name] )
-            return { name: name, actor: devCap[name] };
-        name = "device=" + devObj.id;
-        if ( devCap[name] )
-            return { name: name, actor: devCap[name] };
-        name = "udn=" + devObj.udn;
-        if ( devCap[name] )
-            return { name: name, actor: devCap[name] };
-        name = devObj.device_type;
-        if ( devCap[name] )
-            return { name: name, actor: devCap[name] };
-        name = "category=" + devObj.category_num + "/" + devObj.subcategory_num;
-        if ( devCap[name] )
-            return { name: name, actor: devCap[name] };
-        name = "category=" + devObj.category_num;
-        if ( devCap[name] )
-            return { name: name, actor: devCap[name] };
-        name = "plugin_num=" + 0; // ???
-        if ( devCap[name] )
-            return { name: name, actor: devCap[name] };
-        return false;
-    }
-    
     function isControllable( devobj ) {
         // just this for now, in future look at devCap
         if ( devobj.device_type == deviceType ) { return true; } /* Treat ourselves as controllable */
         if ( isSwitch( devobj ) ) {
             return true; 
-        }
-        if ( findActor( devobj ) ) {
-            console.log("Found actor for device " + devobj.id + " " + devobj.name);
-            return true;
         }
         return false;
     }
@@ -341,8 +285,8 @@ var DelayLight = (function(api) {
     function addDevice( base ) {
         var ix = jQuery("div."+base+"DeviceRow").length + 1;
         var newId = base + "Device" + ix;
-        jQuery('div#'+base+'DeviceGroup').append('<div class="row '+base+'DeviceRow" id="'+base+'DeviceRow' + ix + '">'
-            + '<div class="col-xs-6 col-sm-6 col-md-4 col-lg-3 col-xl-2"><select class="'+base+'Device" id="' + newId + '"></select></div>');
+        jQuery('div#'+base+'DeviceGroup').append('<div class="row '+base+'DeviceRow" id="'+base+'DeviceRow' + ix + '">' +
+            '<div class="col-xs-6 col-sm-6 col-md-4 col-lg-3 col-xl-2"><select class="'+base+'Device" id="' + newId + '"></select></div>');
         jQuery('select#' + newId).append(jQuery('select#'+base+'Device1 option:not(.scene)').clone()).on( "change.delaylight", changeSelectedDevice );
         jQuery('div#'+base+'DeviceRow'+ix).append('<div class="col-xs-5 col-sm-5 col-md-3 col-lg-3 col-xl-2 dimmergroup" id="'+base+'dim'+ix+'">Dimming Level: <input class="dimminglevel" value="100"></div>');
         // Initially hide the dimming level input
@@ -548,7 +492,7 @@ var DelayLight = (function(api) {
             html += '<div class="clearfix">';
             
             html += '<div id="tbbegging"><em>Find DelayLight useful?</em> Please consider a small one-time donation, or $1 monthly pledge, to support this and my other plugins on <a href="https://www.makersupport.com/toggledbits" target="_blank">MakerSupport.com</a>. I am grateful for any support you choose to give!</div>';
-            html += '<div id="tbcopyright">DelayLight ver 1.1 &copy; 2016,2017,2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. For documentation and license, please see this project\'s <a href="https://github.com/toggledbits/DelayLight" target="_blank">GitHub repository</a>.</div>';
+            html += '<div id="tbcopyright">DelayLight ver 1.2dev &copy; 2016,2017,2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. For documentation and license, please see this project\'s <a href="https://github.com/toggledbits/DelayLight" target="_blank">GitHub repository</a>.</div>';
 
             // Push generated HTML to page
             api.setCpanelContent(html);
@@ -662,11 +606,11 @@ var DelayLight = (function(api) {
 
             updateSelectedDevices();
             
-            api.registerEventHandler('on_ui_cpanel_before_close', DelayLight, 'onBeforeCpanelClose');
+            api.registerEventHandler('on_ui_cpanel_before_close', DelayLightTimer, 'onBeforeCpanelClose');
         }
         catch (e)
         {
-            console.log( 'Error in DelayLight.configurePlugin(): ' + e.toString() );
+            console.log( 'Error in DelayLightTimer.configurePlugin(): ' + e.toString() );
         }
     }
     

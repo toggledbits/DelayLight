@@ -8,6 +8,11 @@
     </serviceStateTable>
     <actionList>
         <action>
+            <name>AddTimer</name>
+            <argumentList>
+            </argumentList>
+        </action>
+        <action>
             <name>GetPluginVersion</name>
             <argumentList>
                 <argument>
