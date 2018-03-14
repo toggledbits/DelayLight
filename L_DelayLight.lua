@@ -10,11 +10,14 @@
 module("L_DelayLight", package.seeall)
 
 local _PLUGIN_NAME = "DelayLight"
-local _PLUGIN_VERSION = "1.1"
+local _PLUGIN_VERSION = "1.2dev"
 local _CONFIGVERSION = 00107
 
 local MYSID = "urn:toggledbits-com:serviceId:DelayLight"
 local MYTYPE = "urn:schemas-toggledbits-com:device:DelayLight:1"
+
+local TIMERSID = "urn:toggledbits-com:serviceId:DelayLightTimer"
+local TIMERTYPE = "urn:schemas-toggledbits-com:device:DelayLightTimer:1"
 
 local SENSOR_SID  = "urn:micasaverde-com:serviceId:SecuritySensor1"
 local SWITCH_SID  = "urn:upnp-org:serviceId:SwitchPower1"
@@ -67,10 +70,10 @@ local function L(msg, ...)
     local str
     local level = 50
     if type(msg) == "table" then
-        str = tostring(msg.prefix or _PLUGIN_NAME) .. tostring(msg.msg or "???")
+        str = tostring(msg.prefix or _PLUGIN_NAME) .. ": " .. tostring(msg.msg)
         level = msg.level or level
     else
-        str = _PLUGIN_NAME .. ": " .. msg
+        str = _PLUGIN_NAME .. ": " .. tostring(msg)
     end
     str = string.gsub(str, "%%(%d+)", function( n )
             n = tonumber(n, 10)
@@ -195,7 +198,7 @@ local function getVarNumeric( name, dflt, dev, sid )
 end
 
 -- A ternary operator
-local function iff( cond, trueVal, falseVal )
+local function iif( cond, trueVal, falseVal )
     if cond then return trueVal
     else return falseVal end
 end
@@ -472,7 +475,7 @@ end
 
 -- Perform the actions of a given actor.
 local function doDeviceAction( actorName, actor, target, state, vtDev )
-    local selector = iff( state, "on", "off" )
+    local selector = iif( state, "on", "off" )
     if actor.states ~= nil and actor.states[selector] ~= nil then
         local methods = actor.states[selector].method
         for mn,mm in pairs(methods) do
@@ -538,7 +541,7 @@ local function deviceOnOff( targetDevice, state, vtDev )
         i, _, targetId,l = targetDevice:find("(%w+)=(%d+)")
         if i == nil then
             targetId = tonumber(targetDevice,10)
-            lvl = iff( state, 100, 0 )
+            lvl = iif( state, 100, 0 )
         else
             D("deviceOnOff() handling dimming spec device=%1, level=%2", targetId, l)
             targetId = tonumber(targetId,10)
@@ -549,7 +552,7 @@ local function deviceOnOff( targetDevice, state, vtDev )
             local desc = luup.devices[targetId].description
             -- ??? need to resolve the real utility of this (does it have any?)
             local oldState = tonumber(luup.variable_get( SWITCH_SID, "Status", targetId ) or "0", 10)
-            local targetVal = iff( state, 1, 0 )
+            local targetVal = iif( state, 1, 0 )
             if luup.devices[targetId].device_type == "urn:schemas-upnp-org:device:VSwitch:1" then
                 -- VirtualSwitch plugin requires newTargetValue parameter as string, which isn't strict UPnP, so handle separately.
                 D("deviceOnOff() handling %1 (%2) as VSwitch1 exception, setting target=%3", targetId, desc, state)
@@ -565,7 +568,7 @@ local function deviceOnOff( targetDevice, state, vtDev )
                 D("deviceOnOff() action SetTarget for device %1 returned %2 %3", targetId, rc, rs)
             elseif luup.devices[targetId].device_type == MYTYPE then
                 -- Yes, we can control another delay light!
-                local action = iff( state, "Trigger", "Reset" )
+                local action = iif( state, "Trigger", "Reset" )
                 D("deviceOnOff() handling %1 (%2) as DelayLight, action %3", targetId, desc, action)
                 local rc, rs = luup.call_action( MYSID, action, {}, targetId )
                 D("deviceOnOff() action %4 for device %1 returned %2 %3", targetId, rc, rs, action)
@@ -633,7 +636,7 @@ local function isDeviceOn( devnum, dinfo, newVal, pdev )
     if dinfo.comparison == '<>' or dinfo.comparison == "~=" or dinfo.comparison == "!=" then inv = not inv end
     D("isDeviceOn() testing %1 val %2 against %3", devnum, newVal, testValues)
     for _,tv in ipairs( testValues ) do
-        if iff( inv, newVal ~= tostring( tv ), newVal == tostring( tv ) ) then
+        if iif( inv, newVal ~= tostring( tv ), newVal == tostring( tv ) ) then
             return true
         end
     end
@@ -981,14 +984,20 @@ function trigger( state, pdev )
     end
 end
 
+local function resetTimer( pdev )
+    D("resetTimer(%1)", pdev)
+    addEvent{ event="resetTimer" }
+    runStamp = runStamp + 1 -- this kills the timer thread (eventually)
+    luup.variable_set( MYSID, "Status", STATE_IDLE, pdev )
+    luup.variable_set( MYSID, "Timing", 0, pdev )
+    luup.variable_set( MYSID, "OffTime", 0, pdev )
+    luup.variable_set( MYSID, "OnTime", 0, pdev )
+end
+
 function reset( force, pdev )
     D("reset(%1,%2)", force, pdev)
     addEvent{ event="reset", force=force }
-    runStamp = runStamp + 1 -- this kills the timer thread (eventually)
-    luup.variable_set( MYSID, "Status", STATE_IDLE, pdev )
-    luup.variable_set( MYSID, "Timing", 0, luup.device )
-    luup.variable_set( MYSID, "OffTime", 0, pdev )
-    luup.variable_set( MYSID, "OnTime", 0, pdev )
+    resetTimer( pdev )
     doLightsOff( pdev )
     return true
 end
@@ -1007,7 +1016,7 @@ function setEnabled( enabled, pdev )
         return
     end
     addEvent{ event="enable", enabled=enabled }
-    luup.variable_set( MYSID, "Enabled", iff( enabled, "1", "0" ), pdev )
+    luup.variable_set( MYSID, "Enabled", iif( enabled, "1", "0" ), pdev )
     -- If disabling, do nothing else, so current actions complete/expire.
     if enabled then
         -- start new timer thread
@@ -1258,7 +1267,14 @@ function watch( dev, sid, var, oldVal, newVal )
                 if dinfo.type == "load" and not isAnyTriggerOn( false, true, luup.device ) then
                     D("watch() all loads now off in state %1, reset.", status)
                     if status ~= STATE_IDLE then 
-                        reset( true, luup.device )
+                        -- We use resetTimer() here rather than reset(), because reset() sends all
+                        -- lights off. That's a problem for polled/non-instant loads, because
+                        -- we can get an "off" watch call for a polled load but the next polled
+                        -- load in the same config might be "on", but that isn't seen until a
+                        -- later poll (the human in the room sees two lights on, and one
+                        -- was turned off, and then the other goes off mysteriously before timer
+                        -- expires)
+                        resetTimer( luup.device )
                     end
                 elseif dinfo.type == "trigger" and status ~= STATE_IDLE then
                     -- Trigger device turning off in active state.
