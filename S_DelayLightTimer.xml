@@ -51,14 +51,5 @@
             <argumentList>
             </argumentList>
         </action>
-        <action>
-            <name>SetDebug</name>
-            <argumentList>
-                <argument>
-                    <name>debug</name>
-                    <direction>in</direction>
-                </argument>
-            </argumentList>
-        </action>
     </actionList>
 </scpd>
