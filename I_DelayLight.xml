@@ -13,13 +13,13 @@
             delayLightWatch = DelayLight.watch
             delayLightRequestHandler = DelayLight.request
             luup.register_handler("delayLightRequestHandler", "DelayLight")
-            return DelayLight.start(devNum)
+            return DelayLight.startPlugin(devNum)
         end
     </functions>
     <startup>startupDelayLight</startup>
     <actionList>
         <action>
-            <serviceId>urn:toggledbits-com:serviceId:DelayLight</serviceId>
+            <serviceId>urn:toggledbits-com:serviceId:DelayLightTimer</serviceId>
             <name>SetEnabled</name>
             <run>
                 DelayLight.setEnabled( lul_settings.newEnabledValue, lul_device )
@@ -27,18 +27,26 @@
             </run>
         </action>
         <action>
-            <serviceId>urn:toggledbits-com:serviceId:DelayLight</serviceId>
+            <serviceId>urn:toggledbits-com:serviceId:DelayLightTimer</serviceId>
             <name>Reset</name>
             <run>
-                DelayLight.reset( true, lul_device )
+                DelayLight.actionReset( true, lul_device )
+                return true
+            </run>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:DelayLightTimer</serviceId>
+            <name>Trigger</name>
+            <run>
+                DelayLight.actionTrigger( DelayLight.STATE_AUTO, lul_device )
                 return true
             </run>
         </action>
         <action>
             <serviceId>urn:toggledbits-com:serviceId:DelayLight</serviceId>
-            <name>Trigger</name>
+            <name>AddTimer</name>
             <run>
-                DelayLight.trigger( DelayLight.STATE_AUTO, lul_device )
+                DelayLight.addTimer( lul_device )
                 return true
             </run>
         </action>
@@ -60,14 +68,6 @@
             <run>
                 local newDebugValue = tonumber(lul_settings.debug or "0", 10)
                 DelayLight.setDebug( debug ~= 0, lul_device )
-                return true
-            </run>
-        </action>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:DelayLight</serviceId>
-            <name>getinfo</name>
-            <run>
-                DelayLight.getinfo( lul_device )
                 return true
             </run>
         </action>

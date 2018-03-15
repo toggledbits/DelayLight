@@ -5,49 +5,10 @@
         <minor>0</minor>
     </specVersion>
     <serviceStateTable>
-        <stateVariable sendEvents="yes">
-            <name>Status</name>
-            <dataType>string</dataType>
-            <defaultValue>idle</defaultValue>
-            <shortCode>status</shortCode>
-        </stateVariable>
-        <stateVariable sendEvents="yes">
-            <name>OffTime</name>
-            <dataType>ui4</dataType>
-            <defaultValue>0</defaultValue>
-            <shortCode>offtime</shortCode>
-        </stateVariable>
-        <stateVariable sendEvents="yes">
-            <name>Message</name>
-            <dataType>string</dataType>
-            <defaultValue></defaultValue>
-            <shortCode>message</shortCode>
-        </stateVariable>
-        <stateVariable sendEvents="yes">
-            <name>Timing</name>
-            <dataType>ui1</dataType>
-            <defaultValue>0</defaultValue>
-            <shortCode>timing</shortCode>
-        </stateVariable>
     </serviceStateTable>
     <actionList>
         <action>
-            <name>SetEnabled</name>
-            <argumentList>
-                <argument>
-                    <name>newEnabledValue</name>
-                    <direction>in</direction>
-                    <relatedStateVariable>Enabled</relatedStateVariable>
-                </argument>
-            </argumentList>
-        </action>
-        <action>
-            <name>Reset</name>
-            <argumentList>
-            </argumentList>
-        </action>
-        <action>
-            <name>Trigger</name>
+            <name>AddTimer</name>
             <argumentList>
             </argumentList>
         </action>
@@ -67,26 +28,6 @@
                 <argument>
                     <name>debug</name>
                     <direction>in</direction>
-                </argument>
-            </argumentList>
-        </action>
-        <action>
-            <name>getinfo</name>
-            <argumentList>
-                <argument>
-                    <name>deviceActions</name>
-                    <direction>out</direction>
-                    <relatedStateVariable>int_da</relatedStateVariable>
-                </argument>
-                <argument>
-                    <name>eventList</name>
-                    <direction>out</direction>
-                    <relatedStateVariable>int_el</relatedStateVariable>
-                </argument>
-                <argument>
-                    <name>pollList</name>
-                    <direction>out</direction>
-                    <relatedStateVariable>int_pl</relatedStateVariable>
                 </argument>
             </argumentList>
         </action>
