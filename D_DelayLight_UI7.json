@@ -82,7 +82,7 @@
                     },
                     "Label": {
                         "lang_tag": "tb_delaylight_how",
-                        "text": "To create a timer, click the <b>Add Timer</b> button. Luup will reload, and browser cache flush/reload is also recommended."
+                        "text": "To create a timer, click the <b>Add Timer</b> button. Luup will reload; a browser cache flush/page reload is highly recommended."
                     }
                 },
                 {
@@ -98,7 +98,22 @@
                         "text": "DelayLight ver 1.2dev &#169; 2016,2017,2018 Patrick H. Rigney, All Rights Reserved.<br/><a href=\"http://forum.micasaverde.com/index.php/topic,60498.0.html\" target=\"_blank\">Forum thread</a> &#149; <a href=\"http://www.toggledbits.com/delaylight\" target=\"_blank\">Documentation and license information</a>."
                     }
                 }
-			]
+			],
+            "Conditions": [
+                {
+                    "Trigger": {
+                        "Operands": [{
+                            "Service": "urn:toggledbits-com:serviceId:DelayLight",
+                            "Variable": "Converted",
+                            "Value": {
+                                "Equals": "1"
+                            }
+                        }]
+                    },
+                    "Action": "disable",
+                    "Target": "addtimer"
+                }
+            ]
 		},
 		{
 			"Label": {
