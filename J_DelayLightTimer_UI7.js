@@ -31,6 +31,7 @@ var DelayLightTimer = (function(api) {
     function onBeforeCpanelClose(args) {
         /* Send a reconfigure */
         if ( configModified ) {
+            alert("Notice: a Luup reload will now be requested so that your changes may take effect.");
             var devid = api.getCpanelDeviceId();
             api.performActionOnDevice( devid, "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "Reload", { } );
         }
@@ -67,7 +68,7 @@ var DelayLightTimer = (function(api) {
         });
     }
     
-    function updateTriggers() {
+    function changeTrigger( ev ) {
         var myDevice = api.getCpanelDeviceId();
         var slist = [];
         jQuery('select.sensor').each( function( ix, obj ) {
@@ -83,7 +84,7 @@ var DelayLightTimer = (function(api) {
         api.setDeviceStatePersistent( myDevice, serviceId, "Triggers", slist.join(","), 0);
         configModified = true;
     }
-
+    
     function updateSelectedDevices() {
         var myDevice = api.getCpanelDeviceId();
         var onlist = [], offlist = [];
@@ -122,7 +123,7 @@ var DelayLightTimer = (function(api) {
                         level = 0;
                     }
                 }
-                if ( 0 != level ) {
+                if ( 0 !== level ) {
                     offlist.push( devId + "=" + level );
                 } else {
                     offlist.push( devId );
@@ -180,10 +181,10 @@ var DelayLightTimer = (function(api) {
                 jQuery("input#timer-man").addClass("tberror").val();
             }
         }
-
-        updateTriggers();
-        updateSelectedDevices();
-        configModified = true;
+        
+        /* We do not set configModified here because changing these values has an
+           immediate effect on plugin behavior without reload. Triggers and device
+           changes are handled separately. */
     }
     
     function checkDelay( ev ) {
@@ -222,10 +223,10 @@ var DelayLightTimer = (function(api) {
 
     function isSwitch( devobj ) {
         if ( undefined === devobj ) { return false; }
-        return ( devobj.category_num == 3 )
-            || devobj.device_type == "urn:schemas-upnp-org:device:VSwitch:1"
-            || deviceImplements( devobj, "urn:upnp-org:serviceId:SwitchPower1" )
-            || isDimmer( devobj )
+        return ( devobj.category_num == 3 ) ||
+            devobj.device_type == "urn:schemas-upnp-org:device:VSwitch:1" ||
+            deviceImplements( devobj, "urn:upnp-org:serviceId:SwitchPower1" ) ||
+            isDimmer( devobj )
             ;
     }
     
@@ -238,6 +239,7 @@ var DelayLightTimer = (function(api) {
         return false;
     }
 
+    /** Update device row. Do not set configModified here, because this is used during restore at startup */
     function updateRowForSelectedDevice( target ) {
         var objId = jQuery(target).attr("id");
         var objIx, base;
@@ -269,7 +271,7 @@ var DelayLightTimer = (function(api) {
         
         jQuery("i#add-"+base+"device-btn").show();
         
-        if ( objIx == 1 && ( devNum == "" || devNum.substr(0,1) == "S" ) ) {
+        if ( objIx == 1 && ( devNum === "" || devNum.substr(0,1) == "S" ) ) {
             jQuery("i#add-"+base+"device-btn").hide();
             if ( devNum.substr(0,1) == "S" ) {
                 jQuery("div."+base+"DeviceRow:not(:first)").remove();
@@ -282,6 +284,10 @@ var DelayLightTimer = (function(api) {
         updateSelectedDevices();
     }
     
+    function changeDeviceOption( ev ) {
+        updateSelectedDevices();
+    }
+    
     function addDevice( base ) {
         var ix = jQuery("div."+base+"DeviceRow").length + 1;
         var newId = base + "Device" + ix;
@@ -290,7 +296,7 @@ var DelayLightTimer = (function(api) {
         jQuery('select#' + newId).append(jQuery('select#'+base+'Device1 option:not(.scene)').clone()).on( "change.delaylight", changeSelectedDevice );
         jQuery('div#'+base+'DeviceRow'+ix).append('<div class="col-xs-5 col-sm-5 col-md-3 col-lg-3 col-xl-2 dimmergroup" id="'+base+'dim'+ix+'">Dimming Level: <input class="dimminglevel" value="100"></div>');
         // Initially hide the dimming level input
-        jQuery('div#'+base+'dim'+ix+' input.dimminglevel').val(base=="on"?100:0).prop( 'disabled', true ).on( "change.delaylight", updateSelectedDevices );
+        jQuery('div#'+base+'dim'+ix+' input.dimminglevel').val(base=="on"?100:0).prop( 'disabled', true ).on( "change.delaylight", changeDeviceOption );
         jQuery('div#'+base+'dim'+ix).hide();
         return ix;
     }
@@ -526,10 +532,10 @@ var DelayLightTimer = (function(api) {
                         invert = true;
                     }
                     var newId = "sensor" + ix;
-                    jQuery('div#sensorgroup').append('<div class="row sensorrow"><div class="col-xs-11 col-sm-6 col-md-5 col-lg-4 col-xl-3">'
-                        + '<select class="sensor col-sm-2 col-md-2" id="' + newId + '"></select>'
-                        + ' <input type="checkbox" class="tbinvert" id="invert'+ix+'"' + ( invert ? " checked" : "" ) + '>Invert'
-                        + '</div></div>');
+                    jQuery('div#sensorgroup').append('<div class="row sensorrow"><div class="col-xs-11 col-sm-6 col-md-5 col-lg-4 col-xl-3">' +
+                        '<select class="sensor col-sm-2 col-md-2" id="' + newId + '"></select>' +
+                        ' <input type="checkbox" class="tbinvert" id="invert'+ix+'"' + ( invert ? " checked" : "" ) + '>Invert' +
+                        '</div></div>');
                     jQuery('select#' + newId).append(jQuery('select#sensor1 option').clone());
                     jQuery('select#' + newId).val(v);
                 });
@@ -560,27 +566,27 @@ var DelayLightTimer = (function(api) {
             }
             
             // Change scripts
-            jQuery("select.sensor").off( ".delaylight" ).on( "change.delaylight", updateTriggers );
-            jQuery("input.tbinvert").off( ".delaylight" ).on( "change.delaylight", updateTriggers );
+            jQuery("select.sensor").off( ".delaylight" ).on( "change.delaylight", changeTrigger );
+            jQuery("input.tbinvert").off( ".delaylight" ).on( "change.delaylight", changeTrigger );
             jQuery("i#add-sensor-btn").click( function( ) {
                 var lastId = jQuery("div.sensorrow:last select").attr("id");
                 var ix = parseInt(lastId.substr(6)) + 1;
                 var newId = "sensor" + ix;
-                jQuery('div#sensorgroup').append('<div class="row sensorrow"><div class="col-xs-11 col-sm-6 col-md-5 col-lg-4 col-xl-3">'
-                    + '<select class="sensor" id="' + newId + '"></select>'
-                    + ' <input type="checkbox" class="tbinvert" id="invert'+ix+'">Invert'
-                    + '</div></div>');
-                jQuery('select#' + newId).append(jQuery('select#sensor1 option').clone()).change( updateTriggers );
-                jQuery("input#invert"+ix).change( updateTriggers );
+                jQuery('div#sensorgroup').append('<div class="row sensorrow"><div class="col-xs-11 col-sm-6 col-md-5 col-lg-4 col-xl-3">' +
+                    '<select class="sensor" id="' + newId + '"></select>' +
+                    ' <input type="checkbox" class="tbinvert" id="invert'+ix+'">Invert' +
+                    '</div></div>');
+                jQuery('select#' + newId).append(jQuery('select#sensor1 option').clone()).change( changeTrigger );
+                jQuery("input#invert"+ix).change( changeTrigger );
             });
 
             jQuery("select.onDevice").off( ".delaylight" ).on( 'change.delaylight', changeSelectedDevice );
             jQuery("i#add-ondevice-btn").on( 'click.delaylight', function() { addDevice("on"); } );
-            jQuery("div.dimmergroup input").off( ".delaylight" ).on( "change.delaylight", updateSelectedDevices );
+            jQuery("div.dimmergroup input").off( ".delaylight" ).on( "change.delaylight", changeDeviceOption );
 
             jQuery("select.offDevice").off( ".delaylight" ).on( 'change.delaylight', changeSelectedDevice );
             jQuery("i#add-offdevice-btn").on( 'click.delaylight', function() { addDevice( "off" ); } );
-            jQuery("div.dimmergroup input").off( ".delaylight" ).on( "change.delaylight", updateSelectedDevices );
+            jQuery("div.dimmergroup input").off( ".delaylight" ).on( "change.delaylight", changeDeviceOption );
 
             s = parseInt( api.getDeviceState( myDevice, serviceId, "AutoDelay" ) || 60 );
             jQuery("input#timer-auto").val(s).change( checkDelay );
@@ -604,8 +610,6 @@ var DelayLightTimer = (function(api) {
             }
             jQuery("div.housemodes input").change( updateStoredConfig );
 
-            updateSelectedDevices();
-            
             api.registerEventHandler('on_ui_cpanel_before_close', DelayLightTimer, 'onBeforeCpanelClose');
         }
         catch (e)
