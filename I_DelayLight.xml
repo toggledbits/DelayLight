@@ -30,7 +30,7 @@
             <serviceId>urn:toggledbits-com:serviceId:DelayLightTimer</serviceId>
             <name>Reset</name>
             <run>
-                DelayLight.reset( true, lul_device )
+                DelayLight.actionReset( true, lul_device )
                 return true
             </run>
         </action>
@@ -38,7 +38,7 @@
             <serviceId>urn:toggledbits-com:serviceId:DelayLightTimer</serviceId>
             <name>Trigger</name>
             <run>
-                DelayLight.trigger( DelayLight.STATE_AUTO, lul_device )
+                DelayLight.actionTrigger( DelayLight.STATE_AUTO, lul_device )
                 return true
             </run>
         </action>
