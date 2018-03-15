@@ -11,6 +11,7 @@
 			},
 			"Position": "0",
 			"TabType": "flash",
+            "top_navigation_tab": 1,
 			"ControlGroup": [{
 					"id": "1",
 					"scenegroup": "1"
@@ -50,21 +51,6 @@
 					},
 					"ControlCode": "message"
 				},
-                {
-					"ControlType": "label",
-					"top": "0",
-					"left": "0",
-					"Label": {
-						"lang_tag": "tb_delaylight_tag",
-						"text": "DelayLight Load Timing Control"
-					},
-					"Display": {
-						"Top": 0,
-						"Left": 0,
-						"Width": 320,
-						"Height": 24
-					}
-				},
 				{
 					"ControlType": "button",
 					"top": "0",
@@ -74,7 +60,7 @@
 						"text": "Add Timer"
 					},
 					"Display": {
-						"Top": 30,
+						"Top": 0,
 						"Left": 0,
 						"Width": 120,
 						"Height": 24
@@ -85,7 +71,33 @@
 						"Parameters": []
 					},
 					"ControlCode": "addtimer"
-				}
+				},
+                {
+                    "ControlType": "label",
+                    "Display": {
+                        "Top": 30,
+                        "Left": 0,
+                        "Width": 320,
+                        "Height": 24
+                    },
+                    "Label": {
+                        "lang_tag": "tb_delaylight_how",
+                        "text": "To create a timer, click the <b>Add Timer</b> button. Luup will reload, and browser cache flush/reload is also recommended."
+                    }
+                },
+                {
+                    "ControlType": "label",
+                    "Display": {
+                        "Top": 90,
+                        "Left": 0,
+                        "Width": 320,
+                        "Height": 24
+                    },
+                    "Label": {
+                        "lang_tag": "tb_delaylight_about",
+                        "text": "DelayLight ver 1.2dev &#169; 2016,2017,2018 Patrick H. Rigney, All Rights Reserved.<br/><a href=\"http://forum.micasaverde.com/index.php/topic,60498.0.html\" target=\"_blank\">Forum thread</a> &#149; <a href=\"http://www.toggledbits.com/delaylight\" target=\"_blank\">Documentation and license information</a>."
+                    }
+                }
 			]
 		},
 		{
