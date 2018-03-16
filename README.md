@@ -98,20 +98,64 @@ the operating controls.
 
 There is no programmed limit to the number of child timers you can create.
 
-### Additional Features ###
+### Configuration Options/Settings ###
 
-By default, DelayLight turns off the device on the off list when its timing period expires, regardless of sensor state.
-A "hold-over" can be configured, so that lights do not go out when a configured
-sensor is still tripped. When all sensors are reset, the off list is then applied. 
-In this way, for example, a motion sensor and a door sensor could be used together to control lights in 
-a space, and while the sensor detects motion or the door remains open, the lights remain on.
+#### Automatic Off Delay ####
 
-When a sensor triggers an automatic timing cycle, DelayLight's default behavior is to turn on the devices on the on list immediately.
-This can be delayed by setting an "on" delay--the on list devices are not turned on until the delay expires, and then the off delay
-timing begins after.
+This is the length (in seconds) of the *automatic* timing cycle. The automatic timing cycle is started when
+a "Trigger" device (below) is tripped. If 0, there is no automatic timing.
 
-DelayLight will, by default, operate (when enabled) in any house mode. It can be limited to trigger only in specific, selected house
-modes at the user's option.
+#### Manual Off Delay ####
+
+This is the length (in seconds) of a *manual* timing cycle. A manual timing cycle is started when an "On" or "Off" device
+is turned on manually (not by the action of automatic triggering).
+
+#### Triggers ####
+
+The "Triggers" are the devices that will initiate (or extend) an automatic timing cycle when tripped. When used, these are
+typically motion or door sensors. Use of triggers is not required; if no trigger devices are specified, the timer will operating
+with manual timing only.
+
+To use more than one device as a trigger, use the green-circled plus icon to add additional device selectors.
+
+The "invert" checkbox inverts the sense of DelayLight's test. That is, for the corresponding device, timing will start when the
+tripped state of the sensor resets.
+
+DelayLight timers can use another timer as a sensor (so your timers will appear on the list of trigger devices as you add more of them).
+This is useful for tandem-triggering (following) of one timer after another. One can also start a timer based on the reset of another
+(using the invert checkbox).
+
+#### On Devices ####
+
+The "On" list devices are those devices that will be turned on when automatic timing is initiated. You may add multiple devices,
+and for each dimmer, set its dimming level. Alternately, you may select a single scene to control whatever devices you wish.
+
+#### Off Devices ####
+
+The "Off" list devices are those devices that are turned off when either manual or automatic timing finishes.
+
+In a room with a motion sensor and multiple lights, a common use scenario is to select the motion sensor as the trigger, one
+of the lights in the room as the "On" device, and all of the lights in the room as the "Off" devices. This causes the single
+"On" list device to come on in response to the motion sensor tripping, but when timing finishes, all lights in the room (including
+any that were turned on manually after motion started timing) are turned off.
+
+#### Hold-over ####
+
+By default, when timing finishes, all "off" list devices are turned off immediately. Alternately, the timer can be configured
+to hold the lights on past the end of the timing cycle until all trigger devices have reset.
+
+A use case for this could be a room with both a motion sensor and a door sensor (such as a garage). With the two sensors configured
+as triggers, the lights can come on automatically, and with hold-over enabled, as long as the door sensor sees the door open, the
+lights are held on, even if there's no motion detected and the timer expires.
+
+#### On Delay ####
+
+By default, when triggered, the "on" list devices are turned on immediately. Setting a non-zero "on" delay delays that action
+by the specified number of seconds. Off-delay timing does not begin until lights are turned on (i.e. after the on delay ends).
+
+#### House Modes ####
+
+To limit automatic triggering to certain house modes, select those modes. If no modes are selected, triggering occurs in all modes.
 
 ### Cautions for Use of Scenes ###
 
@@ -122,14 +166,15 @@ than managing them directly, so direct device control should be used if at all p
 
 DelayLight also uses its own interpretation of whether a scene is active or not.
 As a result, DelayLight still only detects manual triggering for devices that it natively supports (switches and dimmers). 
-It can *control* other devices through
+It can indirectly *control* many other devices through
 the use of a scene, but it cannot *detect state changes* for those devices. For example, you can have a scene to turn your thermostat to Economy mode,
-and DelayLight will run that scene and cause the energy mode change to occur, but spontaneously switching the thermostat to Economy outside of
-DelayLight will not trigger a manual timing cycle, as a light would if it were switched on manually.
+and DelayLight will run that scene to start automatic timing and cause the energy mode change to occur, 
+but spontaneously switching the thermostat to Economy outside of
+DelayLight will not trigger a manual timing cycle, as a standard switch or dimmer would if it were switched on manually.
 
 ## Actions and Triggers ##
 
-DelayLight's service ID `urn:toggledbits.com:serviceId:DelayLight` provides the following triggers and actions:
+DelayLight's service ID `urn:toggledbits.com:serviceId:DelayLightTimer` provides the following triggers and actions:
 
 ### Triggers ###
 
