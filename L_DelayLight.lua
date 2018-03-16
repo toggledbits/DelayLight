@@ -13,9 +13,9 @@ module("L_DelayLight", package.seeall)
 local debugMode = false
 
 local _PLUGIN_NAME = "DelayLight"
-local _PLUGIN_VERSION = "1.2dev"
+local _PLUGIN_VERSION = "1.2"
 local _PLUGIN_URL = "http://www.toggledbits.com/delaylight"
-local _CONFIGVERSION = 00103
+local _CONFIGVERSION = 00105
 
 local MYSID = "urn:toggledbits-com:serviceId:DelayLight"
 local MYTYPE = "urn:schemas-toggledbits-com:device:DelayLight:1"
@@ -730,6 +730,9 @@ local function plugin_runOnce( pdev )
         return
     elseif s == 0 then
         L("First run, setting up new plugin instance...")
+        luup.variable_set(MYSID, "NumChildren", 0, pdev)
+        luup.variable_set(MYSID, "NumRunning", 0, pdev)
+        luup.variable_set(MYSID, "Message", "", pdev)
         luup.variable_set(MYSID, "Version", _CONFIGVERSION, pdev)
         return
     end
@@ -764,6 +767,12 @@ local function plugin_runOnce( pdev )
         luup.reload()
     end
     
+    if s < 00105 then 
+        L("Upgrading plugin %1 configuration to 00105...", pdev)
+        luup.variable_set(MYSID, "NumChildren", 0, pdev)
+        luup.variable_set(MYSID, "NumRunning", 0, pdev)
+        luup.variable_set(MYSID, "Message", "", pdev)
+    end    
     -- Update version last.
     if (s ~= _CONFIGVERSION) then
         luup.variable_set(MYSID, "Version", _CONFIGVERSION, pdev)
@@ -1036,6 +1045,7 @@ function startPlugin( pdev )
 
     -- Ready to go. Start our children.
     local count = 0
+    local started = 0
     for k,v in pairs(luup.devices) do
         if v.device_type == TIMERTYPE and v.device_num_parent == pdev then
             count = count + 1
@@ -1043,13 +1053,15 @@ function startPlugin( pdev )
             local success, err = pcall( startTimer, k, pdev )
             if not success then 
                 L({level=2,msg="Failed to start %1 (%2): %3"}, k, luup.devices[k].description, err)
+            else
+                started = started + 1
             end
         end
     end
     if count == 0 then
         luup.variable_set( MYSID, "Message", "Open control panel!", pdev )
     else
-        luup.variable_set( MYSID, "Message", "", pdev )
+        luup.variable_set( MYSID, "Message", string.format("Started %d/%d at %s", started, count, os.date("%x %X")), pdev )
     end
     
     -- Return success
