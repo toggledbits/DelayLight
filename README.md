@@ -2,8 +2,9 @@
 A plugin for Vera home automation to provide off- and on-delay of controlled loads.
 
 * Single-instance plugin that's efficient with system resources;
-* Easy to configure;
-* Operate switches/dimmers directly, or use scene;
+* Timing survives reloads/reboots;
+* Easy to configure (no Lua or expression syntax to learn);
+* Operates switches/dimmers directly, or runs scenes;
 * Controllable via scenes, Lua, and PLEG.
 
 ## Background ##
@@ -35,7 +36,7 @@ and roll it out.
 
 DelayLight is a simple single-instance plugin that does load (switch, light) on and off delay timing. In its default configuration, it will
 react to a sensor device and turn on one or more configured devices for a selected *automatic* timing period. At the end of the period,
-a set of off commands is sent to a list of devices. A re-trip of the sensor during the automatic timing period restarts the timer. So,
+"off" commands is sent to a list of devices. A re-trip of the sensor during the automatic timing period restarts the timer. So,
 when used in conjunction with a motion sensor, it will, for example, turn on one or more lights, keep them on when subsequent trips
 of the sensor indicate ongoing occupancy of the room, and then sometime later, when no motion has been detected, turn them off.
 
@@ -44,8 +45,9 @@ cycle, it starts a *manual* timing cycle, but does *not* turn on the "on" list d
 During manual timing, a trip of a configured sensor or a change to another controlled light will cause the timing
 to be extended (the event indicates ongoing presence). At the end of timing, all devices on the "off" list are turned off.
 
-Why separate "on" and "off" lists? Many of the rooms I control are presence-supervised with motion sensors. These rooms have a lot of lights,
-and when I enter them at night, I usually only need one light to come on. The "on" list acts like a simple scene for that purpose: when
+Why separate "on" and "off" lists? Many of the rooms I control are presence-supervised with motion sensors. Many of
+these rooms have a lot of lights,
+and when I enter them at night, I often only need one light to come on. The "on" list acts like a simple scene for that purpose: when
 a configured sensor trips, only the "on" list devices are turned on. The "off" list, then, allows me to specify all of the lights in the
 room, so that when the room is later determined to be unoccupied, I'm assured that *all* of the room's lights are turned off, 
 not just the light that came on with motion. That also means that if *any* light on either the "on" list or the "off" list
@@ -67,11 +69,12 @@ on manually while the Vera was down), DelayLight will start a timing cycle when 
 
 For sensors, DelayLight will allow any device that implements the `urn:micasaverde-com:serviceId:SecuritySensor1` service, which includes
 typical motion and door sensors, many multi-sensors, and various plugins that emulate sensor behavior. DelayLight can be triggered by a 
-scene, if the user's needs extend beyond the native device handling.
+scene, if the user's needs extend beyond the native device handling (e.g. trigger based on thermostat setpoint).
 
 For devices, DelayLight will directly control any standard switch or dimmer (that is, devices that implement the `urn:upnp-org:serviceId:SwitchPower1`
-and `urn:upnp-org:serviceId:Dimming1` services). DelayLight will also allow the use of a scene as the on list or off list (or both), 
-making it possible for DelayLight to control devices that do not implement these services. See cautions, below.
+or `urn:upnp-org:serviceId:Dimming1` services). DelayLight will also allow the use of a scene as the "on" list or "off" list (or both), 
+making it possible for DelayLight to control devices that do not implement these services or have other features (such as color
+or color temperature) that the user may want to control. See cautions, below.
 
 > **IMPORTANT** Proper operation of the manual triggering and timing functions of DelayLight require that the switches and dimmers
 > configured offer some flavor of "instant status," that is, that they immediately notify Vera if they are operated manually. An easy
@@ -82,16 +85,16 @@ making it possible for DelayLight to control devices that do not implement these
 ### Adding Timers ###
 
 When DelayLight is first installed, only the master plugin device is visible, usually with the text "Open control panel!"
-displayed. This is your call to action, to open the plugin's control panel (click the arrow on the device card in the Vera dashboard).
-On the Control Panel, you'll see an "Add Timer" button. This creates a new child timer device. Child timers, while they appear as
+displayed on its dashboard card. This is your call to action, to open the plugin's control panel (click the arrow on the device card in the Vera dashboard).
+On the control panel, you'll see an "Add Timer" button. This creates a new child timer device. Child timers, while they appear as
 separate devices, run entirely within the plugin device's environment. However, you can still give them a descriptive name, and assign them
-to a room, to help you keep them organized.
+to separate rooms, to help you keep them organized.
 
-The process of creating a child device takes a moment, as it is necessary to reload Luup, so your UI will go unresponsive for a few
-moments. You should use that time to do a full browser refresh/cache flush reload (Ctrl-F5 typically on Chrome and Firefox for Windows).
+The process of creating a child device takes a moment, as it is necessary to reload Luup. As usual, your UI will go unresponsive for a few
+moments during this reload. You should use that time to do a full browser refresh/cache flush reload (Ctrl-F5 typically on Chrome and Firefox for Windows).
 
-To configure your new timer, click on its Control Panel access arrow in its card on the Vera dashboard, and then click "Settings" below
-the controls.
+To configure your new timer, click on its control panel access button (right-pointing arrow on the dashboard card), and then click "Settings" below
+the operating controls.
 
 There is no programmed limit to the number of child timers you can create.
 
