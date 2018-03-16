@@ -1,6 +1,11 @@
 # DelayLight #
 A plugin for Vera home automation to provide off- and on-delay of controlled loads.
 
+* Single-instance plugin that's efficient with system resources;
+* Easy to configure;
+* Operate switches/dimmers directly, or use scene;
+* Controllable via scenes, Lua, and PLEG.
+
 ## Background ##
 When I had to completely rebuild my Vera installation a couple of months ago, one of
 the choices I made was to not use PLEG if I could avoid it, for various reasons, not the
