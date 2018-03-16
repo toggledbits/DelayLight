@@ -5,6 +5,24 @@
         <minor>0</minor>
     </specVersion>
     <serviceStateTable>
+        <stateVariable sendEvents="yes">
+            <name>Message</name>
+            <dataType>string</dataType>
+            <defaultValue></defaultValue>
+            <shortCode>message</shortCode>
+        </stateVariable>
+        <stateVariable sendEvents="no">
+            <name>NumChildren</name>
+            <dataType>ui4</dataType>
+            <defaultValue>0</defaultValue>
+            <shortCode>children</shortCode>
+        </stateVariable>
+        <stateVariable sendEvents="no">
+            <name>NumRunning</name>
+            <dataType>ui4</dataType>
+            <defaultValue>0</defaultValue>
+            <shortCode>running</shortCode>
+        </stateVariable>
     </serviceStateTable>
     <actionList>
         <action>
