@@ -13,7 +13,7 @@ module("L_DelayLight", package.seeall)
 local debugMode = false
 
 local _PLUGIN_NAME = "DelayLight"
-local _PLUGIN_VERSION = "1.2"
+local _PLUGIN_VERSION = "1.3dev"
 local _PLUGIN_URL = "http://www.toggledbits.com/delaylight"
 local _CONFIGVERSION = 00105
 
@@ -1264,7 +1264,7 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev )
                 if dinfo.type == "load" and not isAnyTriggerOn( false, true, tdev ) then
                     D("timerWatch() all loads now off in state %1, reset.", status)
                     if status ~= STATE_IDLE then
-                        L("Timer %1 (%2) all loads off, timer resetting from %3.", tdev, luup.devices[tdev], status)
+                        L("Timer %1 (%2) all loads off, timer resetting from %3.", tdev, luup.devices[tdev].description, status)
                         -- We use resetTimer() here rather than reset(), because reset() sends all
                         -- loads off. That's a problem for polled/non-instant loads, because
                         -- we can get an "off" watch call for a polled load but the next polled
