@@ -1,14 +1,21 @@
-# DelayLight
+# DelayLight #
 A plugin for Vera home automation to provide off- and on-delay of controlled loads.
+
+* Single-instance plugin that's efficient with system resources;
+* Timing survives reloads/reboots;
+* Easy to configure (no Lua or expression syntax to learn);
+* Operates switches/dimmers directly, or runs scenes;
+* Controllable via scenes, Lua, and PLEG.
 
 ## Background ##
 When I had to completely rebuild my Vera installation a couple of months ago, one of
 the choices I made was to not use PLEG if I could avoid it, for various reasons, not the
-least of which was the considerable load it can place on the Vera if one is not careful.
+least of which was the considerable load it can place on a Vera if one is not careful.
 
-My most common use scenario was simple: timing a load, sometimes with
-a motion sensor and sometimes not, to a delayed-off. I have kids. They leave lights on. I have stairways that get dark and are
-often traversed with full hands. Automation on and off for lights was 99.99% of my usage, and from day one I was always mystified
+My most common use scenario was simple: turning off a light that has been on for a while, 
+sometimes with
+a motion sensor to help detect presence, and sometimes not. I have kids. They leave lights on. I have stairways that get dark and are
+often traversed with full hands. Automating on and off for lights was 99.99% of my PLEG usage, and from day one I was always mystified
 that Vera didn't support it natively. There have been plugins other than PLEG available to do that job, 
 such as the old SmartSwitch plugin. But they all seem to have lost their maintainers and fallen into various stages of disrepair.
 
@@ -27,24 +34,31 @@ and roll it out.
 
 ## Features and Operation ##
 
-DelayLight is a simple multi-instance plugin that does device on and off delay timing. In its default configuration, it will
+DelayLight is a simple single-instance plugin that does load (switch, light) on and off delay timing. In its default configuration, it will
 react to a sensor device and turn on one or more configured devices for a selected *automatic* timing period. At the end of the period,
-a set of off commands is sent to a list of devices. A re-trip of the sensor during the automatic timing period restarts the timer. So,
-when used in conjunction with a motion sensor, it will, for example, turn on one or more lights, and then sometime later, when no motion
-has been detected, turn them off.
+"off" commands is sent to a list of devices. A re-trip of the sensor during the automatic timing period restarts the timer. So,
+when used in conjunction with a motion sensor, it will, for example, turn on one or more lights, keep them on when subsequent trips
+of the sensor indicate ongoing occupancy of the room, and then sometime later, when no motion has been detected, turn them off.
 
-A separate manual timing delay is possible by activating one of the controlled lights manually. If DelayLight is not already in a timing
+A separate manual timing delay is initiated by activating one of the controlled lights manually. If DelayLight is not already in a timing
 cycle, it starts a *manual* timing cycle, but does *not* turn on the "on" list devices.
 During manual timing, a trip of a configured sensor or a change to another controlled light will cause the timing
-to be extended. At the end of timing, all devices on the off list are turned off.
+to be extended (the event indicates ongoing presence). At the end of timing, all devices on the "off" list are turned off.
 
-Why separate on and off lists? Many of the rooms I control are presence-supervised with motion sensors. These rooms have a lot of lights,
-and when I enter them at night, I usually only need one light to come on. The "on" list acts like a scene for that purpose: when
+Why separate "on" and "off" lists? Many of the rooms I control are presence-supervised with motion sensors. Many of
+these rooms have a lot of lights,
+and when I enter them at night, I often only need one light to come on. The "on" list acts like a simple scene for that purpose: when
 a configured sensor trips, only the "on" list devices are turned on. The "off" list, then, allows me to specify all of the lights in the
-room, so that when the room later becomes unoccupied, I'm assured that *all* of the room's lights are turned off, not just the light that came
-on with motion. That also means that if any light in the room is turned on manually, a manual timing cycle is started.
+room, so that when the room is later determined to be unoccupied, I'm assured that *all* of the room's lights are turned off, 
+not just the light that came on with motion. That also means that if *any* light on either the "on" list or the "off" list
+is turned on manually, a *manual* timing cycle is started.
 
-### Reboot/Reload Behavior ###
+As a single-instance plugin, DelayLight is intended to be light on system resources (no pun intended). A single copy of the plugin runs
+all of the configured timers in the system. In fact, a single Vera timer/delay task is used to manage timing for all of the configured
+timer sub-devices as well, so even with a large number of rooms, some with more than one timer, the in-memory footprint of the plugin
+is relatively small. In my own home, I currently have 16 timer devices across 9 rooms.
+
+### Reboot/Reload Survivability ###
 
 DelayLight's most important feature, arguably, is that its timing survives restarts of Luup or the Vera itself. If a reload occurs during
 a timing cycle, DelayLight will attempt to pick up where it left off and turn the lights off at the expected scheduled time. If DelayLight
@@ -55,44 +69,112 @@ on manually while the Vera was down), DelayLight will start a timing cycle when 
 
 For sensors, DelayLight will allow any device that implements the `urn:micasaverde-com:serviceId:SecuritySensor1` service, which includes
 typical motion and door sensors, many multi-sensors, and various plugins that emulate sensor behavior. DelayLight can be triggered by a 
-scene, if the user's needs extend beyond the native device handling.
+scene, if the user's needs extend beyond the native device handling (e.g. trigger based on thermostat setpoint).
 
 For devices, DelayLight will directly control any standard switch or dimmer (that is, devices that implement the `urn:upnp-org:serviceId:SwitchPower1`
-and `urn:upnp-org:serviceId:Dimming1` services). DelayLight will also allow the use of a scene as the on list or off list (or both), 
-making it possible for DelayLight to control devices that do not implement these services. See cautions, below.
+or `urn:upnp-org:serviceId:Dimming1` services). DelayLight will also allow the use of a scene as the "on" list or "off" list (or both), 
+making it possible for DelayLight to control devices that do not implement these services or have other features (such as color
+or color temperature) that the user may want to control. See cautions, below.
 
-### Additional Features ###
+> **IMPORTANT** Proper operation of the manual triggering and timing functions of DelayLight require that the switches and dimmers
+> configured offer some flavor of "instant status," that is, that they immediately notify Vera if they are operated manually. An easy
+> way to test this is to operate the switch manually while watching the Vera UI. If the UI updates to show the correct state of the 
+> switch within two seconds, the device is pushing status to the Vera. There is no reliable workaround for switches and dimmers that
+> do not offer this feature.
 
-By default, DelayLight turns off the device on the off list when its timing period expires, regardless of sensor state.
-A "hold-over" can be configured, so that lights do not go out when a configured
-sensor is still tripped. When all sensors are reset, the off list is then applied. 
-In this way, for example, a motion sensor and a door sensor could be used together to control lights in 
-a space, and while the sensor detects motion or the door remains open, the lights remain on.
+### Adding Timers ###
 
-When a sensor triggers an automatic timing cycle, DelayLight's default behavior is to turn on the devices on the on list immediately.
-This can be delayed by setting an "on" delay--the on list devices are not turned on until the delay expires, and then the off delay
-timing begins after.
+When DelayLight is first installed, only the master plugin device is visible, usually with the text "Open control panel!"
+displayed on its dashboard card. This is your call to action, to open the plugin's control panel (click the arrow on the device card in the Vera dashboard).
+On the control panel, you'll see an "Add Timer" button. This creates a new child timer device. Child timers, while they appear as
+separate devices, run entirely within the plugin device's environment. However, you can still give them a descriptive name, and assign them
+to separate rooms, to help you keep them organized.
 
-DelayLight will, by default, operate (when enabled) in any house mode. It can be limited to trigger only in specific, selected house
-modes at the user's option.
+The process of creating a child device takes a moment, as it is necessary to reload Luup. As usual, your UI will go unresponsive for a few
+moments during this reload. You should use that time to do a full browser refresh/cache flush reload (Ctrl-F5 typically on Chrome and Firefox for Windows).
 
-### Cautions for Scenes ###
+To configure your new timer, click on its control panel access button (right-pointing arrow on the dashboard card), and then click "Settings" below
+the operating controls.
 
-The use of scenes complicates functionality a bit and simplifies it a bit. By using scenes, DelayLight can control devices it might
-otherwise not know how to control. But scenes introduce a level of indirection that isolate DelayLight from what may actually be going
-on with the devices the scene controls. DelayLight goes to considerable effort to find and track these devices, but it is less certain
+There is no programmed limit to the number of child timers you can create.
+
+### Configuration Options/Settings ###
+
+#### Automatic Off Delay ####
+
+This is the length (in seconds) of the *automatic* timing cycle. The automatic timing cycle is started when
+a "Trigger" device (below) is tripped. If 0, there is no automatic timing.
+
+#### Manual Off Delay ####
+
+This is the length (in seconds) of a *manual* timing cycle. A manual timing cycle is started when an "On" or "Off" device
+is turned on manually (not by the action of automatic triggering).
+
+#### Triggers ####
+
+The "Triggers" are the devices that will initiate (or extend) an automatic timing cycle when tripped. When used, these are
+typically motion or door sensors. Use of triggers is not required; if no trigger devices are specified, the timer will operating
+with manual timing only.
+
+To use more than one device as a trigger, use the green-circled plus icon to add additional device selectors.
+
+The "invert" checkbox inverts the sense of DelayLight's test. That is, for the corresponding device, timing will start when the
+tripped state of the sensor resets.
+
+DelayLight timers can use another timer as a sensor (so your timers will appear on the list of trigger devices as you add more of them).
+This is useful for tandem-triggering (following) of one timer after another. One can also start a timer based on the reset of another
+(using the invert checkbox).
+
+#### On Devices ####
+
+The "On" list devices are those devices that will be turned on when automatic timing is initiated. You may add multiple devices,
+and for each dimmer, set its dimming level. Alternately, you may select a single scene to control whatever devices you wish.
+
+#### Off Devices ####
+
+The "Off" list devices are those devices that are turned off when either manual or automatic timing finishes.
+
+In a room with a motion sensor and multiple lights, a common use scenario is to select the motion sensor as the trigger, one
+of the lights in the room as the "On" device, and all of the lights in the room as the "Off" devices. This causes the single
+"On" list device to come on in response to the motion sensor tripping, but when timing finishes, all lights in the room (including
+any that were turned on manually after motion started timing) are turned off.
+
+#### Hold-over ####
+
+By default, when timing finishes, all "off" list devices are turned off immediately. Alternately, the timer can be configured
+to hold the lights on past the end of the timing cycle until all trigger devices have reset.
+
+A use case for this could be a room with both a motion sensor and a door sensor (such as a garage). With the two sensors configured
+as triggers, the lights can come on automatically, and with hold-over enabled, as long as the door sensor sees the door open, the
+lights are held on, even if there's no motion detected and the timer expires.
+
+#### On Delay ####
+
+By default, when triggered, the "on" list devices are turned on immediately. Setting a non-zero "on" delay delays that action
+by the specified number of seconds. Off-delay timing does not begin until lights are turned on (i.e. after the on delay ends).
+
+#### House Modes ####
+
+To limit automatic triggering to certain house modes, select those modes. If no modes are selected, triggering occurs in all modes.
+
+### Cautions for Use of Scenes ###
+
+The use of Vera scenes complicates functionality a bit and simplifies it a bit. By using scenes, DelayLight can control devices it might
+otherwise not know how to control--that's the upside. But scenes introduce a level of indirection that isolate DelayLight from what may actually be going
+on with the devices that the scene controls. DelayLight goes to considerable effort to find and track these devices, but it is less certain
 than managing them directly, so direct device control should be used if at all possible.
 
 DelayLight also uses its own interpretation of whether a scene is active or not.
 As a result, DelayLight still only detects manual triggering for devices that it natively supports (switches and dimmers). 
-It can *control* other devices through
+It can indirectly *control* many other devices through
 the use of a scene, but it cannot *detect state changes* for those devices. For example, you can have a scene to turn your thermostat to Economy mode,
-and DelayLight will run that scene and cause the mode change to occur, but spontaneously switching the thermostat to Economy outside of
-DelayLight will not trigger a manual timing cycle, as a light would if it were switched on manually.
+and DelayLight will run that scene to start automatic timing and cause the energy mode change to occur, 
+but spontaneously switching the thermostat to Economy outside of
+DelayLight will not trigger a manual timing cycle, as a standard switch or dimmer would if it were switched on manually.
 
 ## Actions and Triggers ##
 
-DelayLight's service ID `urn:toggledbits.com:serviceId:DelayLight` provides the following triggers and actions:
+DelayLight's service ID `urn:toggledbits.com:serviceId:DelayLightTimer` provides the following triggers and actions:
 
 ### Triggers ###
 
@@ -115,7 +197,7 @@ The Enabled State trigger signals that a DelayLight device has been enabled or d
 The Trigger action, which takes no parameters, starts an automatic timing cycle. Devices on the "on" list are turned on.
 
 <code>
-    luup.call_action( "urn:toggledbits.com:serviceId:DelayLight", "Trigger", { }, deviceNum )
+    luup.call_action( "urn:toggledbits.com:serviceId:DelayLightTimer", "Trigger", { }, deviceNum )
 </code>
 
 #### Reset ####
@@ -123,7 +205,7 @@ The Trigger action, which takes no parameters, starts an automatic timing cycle.
 The Reset action, which takes no parameters, terminates a timing cycle. All devices on the "off" list are turned off.
 
 <code>
-    luup.call_action( "urn:toggledbits.com:serviceId:DelayLight", "Reset", { }, deviceNum )
+    luup.call_action( "urn:toggledbits.com:serviceId:DelayLightTimer", "Reset", { }, deviceNum )
 </code>
 
 #### SetEnabled ####
@@ -132,7 +214,7 @@ The SetEnabled action takes a single parameter, `newEnabledValue`, and enables o
 When disabled, the DelayLight device will complete any in-progress timing cycle and go to idle state. It cannot be triggered until re-enabled.
 
 <code>
-    luup.call_action( "urn:toggledbits.com:serviceId:DelayLight", "SetEnabled", { newEnabledValue="1" }, deviceNum )
+    luup.call_action( "urn:toggledbits.com:serviceId:DelayLightTimer", "SetEnabled", { newEnabledValue="1" }, deviceNum )
 </code>
 
 ## Future Thoughts ##
