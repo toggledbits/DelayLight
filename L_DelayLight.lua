@@ -862,6 +862,7 @@ local function trigger( state, tdev )
             if delay == 0 then return end -- 0 delay means no auto-on function
         else
             delay = getVarNumeric( "ManualDelay", 3600, tdev )
+            if delay == 0 then return end -- 0 delay means no manual timing
         end
         local newTime = os.time() + delay
         local offTime = getVarNumeric( "OffTime", 0, tdev )
