@@ -34,6 +34,7 @@ STATE_MANUAL = "man"
 STATE_AUTO = "auto"
 
 local runStamp = 0
+local pluginDevice = 0
 local timerState = {}
 local sceneData = {}
 local tickTasks = {}
@@ -104,11 +105,7 @@ end
 
 local function checkVersion(dev)
     local ui7Check = luup.variable_get(MYSID, "UI7Check", dev) or ""
-    if isOpenLuup then
-        L({level=1,msg="This plugin does not run on openLuup"})
-        return debugMode -- allow in debug mode
-    end
-    if luup.version_branch == 1 and luup.version_major >= 7 then
+    if isOpenLuup or (luup.version_branch == 1 and luup.version_major >= 7) then
         if ui7Check == "" then
             -- One-time init for UI7 or better
             luup.variable_set(MYSID, "UI7Check", "true", dev)
@@ -225,7 +222,7 @@ local function addEvent( t )
     if p.dev == nil then L({level=2,msg="addEvent(%1) missing 'dev'"},t) end
     p.when = os.time()
     p.time = os.date("%Y%m%dT%H%M%S")
-    local dev = p.dev or luup.device
+    local dev = p.dev or pluginDevice
     table.insert( timerState[tostring(dev)].eventList, p )
     if #timerState[tostring(dev)].eventList > 25 then table.remove(timerState[tostring(dev)].eventList, 1) end
 end
@@ -1004,6 +1001,7 @@ function startPlugin( pdev )
     end
 
     -- Early inits
+    pluginDevice = pdev
     isALTUI = false
     isOpenLuup = false
     timerState = {}
@@ -1022,7 +1020,15 @@ function startPlugin( pdev )
                     -- newControlPanelFunc="DelayLightTimer_ALTUI.controlPanelDraw",
                     newStyleFunc="DelayLightTimer_ALTUI.getStyle"
                 }, k )
-            D("startTimer() ALTUI's RegisterPlugin action returned resultCode=%1, resultString=%2, job=%3, returnArguments=%4", rc,rs,jj,ra)
+            D("startTimer() ALTUI's RegisterPlugin action for %5 returned resultCode=%1, resultString=%2, job=%3, returnArguments=%4", rc,rs,jj,ra, TIMERTYPE)
+            rc,rs,jj,ra = luup.call_action("urn:upnp-org:serviceId:altui1", "RegisterPlugin",
+                {
+                    newDeviceType=MYTYPE,
+                    newScriptFile="J_DelayLight_ALTUI.js",
+                    newDeviceDrawFunc="DelayLight_ALTUI.deviceDraw",
+                    newStyleFunc="DelayLight_ALTUI.getStyle"
+                }, k )
+            D("startTimer() ALTUI's RegisterPlugin action for %5 returned resultCode=%1, resultString=%2, job=%3, returnArguments=%4", rc,rs,jj,ra, MYTYPE)
         elseif v.device_type == "openLuup" then
             D("start() detected openLuup")
             isOpenLuup = true
@@ -1164,7 +1170,7 @@ function tick(p)
     assert(stepStamp ~= nil)
     if stepStamp ~= runStamp then
         D( "tick(%1) stamp mismatch (got %2, expecting %3), newer thread running. Bye!",
-            luup.device, stepStamp, runStamp )
+            pluginDevice, stepStamp, runStamp )
         return
     end
 
@@ -1205,12 +1211,12 @@ function tick(p)
         if delay < 1 then delay = 1 elseif delay > 60 then delay = 60 end
     end
     tickTasks.master.when = now + delay
-    D("tick(%1) scheduling next master tick for %2 delay %3", luup.device, tickTasks.master.when, delay)
+    D("tick(%1) scheduling next master tick for %2 delay %3", pluginDevice, tickTasks.master.when, delay)
     luup.call_delay( "delayLightTick", delay, p )
 end
 
 -- Handle the timer-specific watch (dispatched from the watch callback)
-local function timerWatch( dev, sid, var, oldVal, newVal, tdev )
+local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
     D("timerWatch(%1,%2,%3,%4,%5,%6)", dev, sid, var, oldVal, newVal, tdev)
     local status = luup.variable_get( TIMERSID, "Status", tdev )
     local myname = luup.devices[tdev].description or tdev
@@ -1308,7 +1314,6 @@ end
 function watch( dev, sid, var, oldVal, newVal )
     D("watch(%1,%2,%3,%4,%5) luup.device(tdev)=%6", dev, sid, var, oldVal, newVal, luup.device)
     assert(var ~= nil) -- nil if service or device watch (can happen on openLuup)
-    assert(luup.device ~= nil) -- ??? openLuup?
 
     local key = string.format("%d:%s/%s", dev, sid, var)
     if watchData[key] then
@@ -1316,7 +1321,7 @@ function watch( dev, sid, var, oldVal, newVal )
             local tdev = tonumber(t, 10)
             if tdev ~= nil then
                 D("watch() dispatching to %1 (%2)", tdev, luup.devices[tdev].description)
-                local success,err = pcall( timerWatch, dev, sid, var, oldVal, newVal, tdev )
+                local success,err = pcall( timerWatch, dev, sid, var, oldVal, newVal, tdev, pluginDevice )
                 if not success then
                     L({level=1,msg="watch() dispatch error: %1"}, err)
                 end
@@ -1392,7 +1397,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
         }
         for k,v in pairs( luup.devices ) do
             if v.device_type == MYTYPE or v.device_type == TIMERTYPE then
-                local devinfo = getDevice( k, luup.device, v ) or {}
+                local devinfo = getDevice( k, pluginDevice, v ) or {}
                 if v.device_type == TIMERTYPE then
                     devinfo.triggerMap = timerState[tostring(k)].triggerMap
                     devinfo.eventList = timerState[tostring(k)].eventList
