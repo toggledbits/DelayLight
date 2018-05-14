@@ -130,6 +130,8 @@ This is useful for tandem-triggering (following) of one timer after another. One
 The "On" list devices are those devices that will be turned on when automatic timing is initiated. You may add multiple devices,
 and for each dimmer, set its dimming level. Alternately, you may select a single scene to control whatever devices you wish.
 
+When setting the "on" dimming level, if you leave the level field blank, the dimming level will not be changed from the device's previous stored level, and will simply be turned on using a binary on command (note that some dimming devices may still interpret this as turning on to 100%, so be sure to test your device).
+
 #### Off Devices ####
 
 The "Off" list devices are those devices that are turned off when either manual or automatic timing finishes.
@@ -138,6 +140,8 @@ In a room with a motion sensor and multiple lights, a common use scenario is to 
 of the lights in the room as the "On" device, and all of the lights in the room as the "Off" devices. This causes the single
 "On" list device to come on in response to the motion sensor tripping, but when timing finishes, all lights in the room (including
 any that were turned on manually after motion started timing) are turned off.
+
+For dimmable devices, the dimming level can be set to any value, so in theory, one could configure a light that goes bright (on = 100) for motion, and then reduces to 50% (off = 50) when the auto timer expires. If the dimming level is left blank, the current dimming level of the device is not changed, and a binary off command is send instead.
 
 #### Hold-over ####
 

@@ -94,15 +94,21 @@ var DelayLightTimer = (function(api) {
                 var objId = jQuery(obj).attr("id");
                 var objIx = objId.substr(8);
                 var el = jQuery('div#ondim'+objIx+' input.dimminglevel');
-                var level = 100;
+                var level = null;
                 if ( el.length == 1 && ! el.prop( 'disabled' ) ) {
-                    level = parseInt( el.removeClass("tberror").val() );
-                    if ( isNaN(level) || level < 0 || level > 100 ) {
-                        el.addClass("tberror");
-                        level = 100;
+                    level = el.removeClass("tberror").val() || "";
+                    if ( level.match( /^\s*$/ ) ) {
+                        /* Blank dimming level means don't set level, just turn on. */
+                        level = null;
+                    } else {
+                        level = parseInt( level );
+                        if ( isNaN(level) || level < 0 || level > 100 ) {
+                            el.addClass("tberror");
+                            level = null;
+                        }
                     }
                 }
-                if ( 100 != level ) {
+                if ( null !== level ) {
                     onlist.push( devId + "=" + level );
                 } else {
                     onlist.push( devId );
@@ -115,15 +121,21 @@ var DelayLightTimer = (function(api) {
                 var objId = jQuery(obj).attr("id");
                 var objIx = objId.substr(9);
                 var el = jQuery('div#offdim'+objIx+' input.dimminglevel');
-                var level = 0;
+                var level = null;
                 if ( el.length == 1 && ! el.prop( 'disabled' ) ) {
-                    level = parseInt( el.removeClass("tberror").val() );
-                    if ( isNaN(level) || level < 0 || level > 100 ) {
-                        el.addClass("tberror");
-                        level = 0;
+                    level = el.removeClass("tberror").val() || "";
+                    if ( level.match( /^\s*$/ ) ) {
+                        /* Blank level means don't set level, just turn off. */
+                        level = null;
+                    } else {
+                        level = parseInt( level );
+                        if ( isNaN(level) || level < 0 || level > 100 ) {
+                            el.addClass("tberror");
+                            level = null;
+                        }
                     }
                 }
-                if ( 0 !== level ) {
+                if ( null !== level ) {
                     offlist.push( devId + "=" + level );
                 } else {
                     offlist.push( devId );
@@ -261,11 +273,8 @@ var DelayLightTimer = (function(api) {
         if ( dimmer ) {
             jQuery(divId).show();
             jQuery(divId+' input.dimminglevel').prop( 'disabled', false );
-            if ( "" === jQuery(divId+' input.dimminglevel').val() ) {
-                jQuery(divId+' input.dimminglevel').val( base == "on" ? 100 : 0 );
-            }
         } else {
-            jQuery(divId+' input.dimminglevel').prop('disabled', true);
+            jQuery(divId+' input.dimminglevel').prop( 'disabled', true );
             jQuery(divId).hide();
         }
         
@@ -294,9 +303,11 @@ var DelayLightTimer = (function(api) {
         jQuery('div#'+base+'DeviceGroup').append('<div class="row '+base+'DeviceRow" id="'+base+'DeviceRow' + ix + '">' +
             '<div class="col-xs-6 col-sm-6 col-md-4 col-lg-3 col-xl-2"><select class="'+base+'Device" id="' + newId + '"></select></div>');
         jQuery('select#' + newId).append(jQuery('select#'+base+'Device1 option:not(.scene)').clone()).on( "change.delaylight", changeSelectedDevice );
-        jQuery('div#'+base+'DeviceRow'+ix).append('<div class="col-xs-5 col-sm-5 col-md-3 col-lg-3 col-xl-2 dimmergroup" id="'+base+'dim'+ix+'">Dimming Level: <input class="dimminglevel" value="100"></div>');
+        jQuery('div#'+base+'DeviceRow'+ix).append('<div class="col-xs-5 col-sm-5 col-md-3 col-lg-3 col-xl-2 dimmergroup" id="'+base+'dim'+ix+'">Dimming Level: <input class="dimminglevel" value=""></div>');
         // Initially hide the dimming level input
-        jQuery('div#'+base+'dim'+ix+' input.dimminglevel').val(base=="on"?100:0).prop( 'disabled', true ).on( "change.delaylight", changeDeviceOption );
+        jQuery('div#'+base+'dim'+ix+' input.dimminglevel')
+            .prop( 'disabled', true )
+            .on( "change.delaylight", changeDeviceOption );
         jQuery('div#'+base+'dim'+ix).hide();
         return ix;
     }
@@ -316,7 +327,7 @@ var DelayLightTimer = (function(api) {
         if ( !isNaN( parseInt(devnum) ) && isDimmer( deviceByNumber[devnum] ) ) {
             /* Dimmer */
             jQuery(divId).show();
-            jQuery(divId + ' input.dimminglevel').prop( 'disabled', false ).val(t.shift() || ({on:100,off:0})[base]);
+            jQuery(divId + ' input.dimminglevel').prop( 'disabled', false ).val(t.shift() || "");
         } else {
             jQuery(divId + 'input.dimminglevel').prop( 'disabled', true );
             jQuery(divId).hide();

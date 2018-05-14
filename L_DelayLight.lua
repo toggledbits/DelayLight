@@ -416,7 +416,7 @@ local function watchTriggers( tdev )
                 ix.valueOn = "1"
                 ix.watched = true
             else
-                L({level=2,msg="Device %1 (%2) doesn't seem to be a sensor or controllable load. Ignoring."}, 
+                L({level=2,msg="Device %1 (%2) doesn't seem to be a sensor or controllable load. Ignoring."},
                     nn, luup.devices[nn].description)
             end
         else
@@ -473,17 +473,15 @@ local function deviceOnOff( targetDevice, state, vtDev )
         if rc ~= 0 then L({level=2,msg="Scene run failed, result %1, %2"}, rc, rs ) end
     else
         -- Controlled load (hopefully).
-        local dimmer = false
-        local targetId, l, i, lvl
-        i, _, targetId,l = targetDevice:find("(%w+)=(%d+)")
+        local targetId, lvl, i
+        i, _, targetId, lvl = targetDevice:find("(%w+)=(%d+)")
         if i == nil then
-            targetId = tonumber(targetDevice,10)
-            lvl = iif( state, 100, 0 )
+            targetId = tonumber(targetDevice, 10)
+            lvl = nil
         else
-            D("deviceOnOff() handling dimming spec device=%1, level=%2", targetId, l)
-            targetId = tonumber(targetId,10)
-            lvl = tonumber(l,10)
-            dimmer = true
+            targetId = tonumber(targetId, 10)
+            lvl = tonumber(lvl, 10)
+            D("deviceOnOff() handling dimming spec %3 as device=%1, level=%2", targetId, lvl, targetDevice)
         end
         if targetId ~= nil and luup.devices[targetId] ~= nil then
             local desc = luup.devices[targetId].description
@@ -491,17 +489,21 @@ local function deviceOnOff( targetDevice, state, vtDev )
             local oldState = tonumber(luup.variable_get( SWITCH_SID, "Status", targetId ) or "0", 10)
             local targetVal = iif( state, 1, 0 )
             if luup.devices[targetId].device_type == "urn:schemas-upnp-org:device:VSwitch:1" then
-                -- VirtualSwitch plugin requires newTargetValue parameter as string, which isn't strict UPnP, so handle separately.
+                -- VirtualSwitch plugin requires newTargetValue parameter as string, which isn't
+                -- strict UPnP, so handle separately.
                 D("deviceOnOff() handling %1 (%2) as VSwitch1 exception, setting target=%3", targetId, desc, state)
-                local rc, rs = luup.call_action("urn:upnp-org:serviceId:VSwitch1", "SetTarget", { newTargetValue=tostring(targetVal) }, targetId)
+                local rc, rs = luup.call_action("urn:upnp-org:serviceId:VSwitch1", "SetTarget",
+                    { newTargetValue=tostring(targetVal) }, targetId)
                 D("deviceOnOff() action SetTarget for device %1 returned %2 %3", targetId, rc, rs)
-            elseif dimmer and luup.device_supports_service(DIMMER_SID, targetId) then
+            elseif lvl ~= nil and luup.device_supports_service(DIMMER_SID, targetId) then
                 D("deviceOnOff() handling %1 (%2) as Dimming1, setting target level=%3", targetId, desc, lvl)
-                local rc, rs = luup.call_action(DIMMER_SID, "SetLoadLevelTarget", { newLoadlevelTarget=lvl }, targetId) -- note case inconsistency in argument name
+                local rc, rs = luup.call_action(DIMMER_SID, "SetLoadLevelTarget",
+                    { newLoadlevelTarget=lvl }, targetId) -- note case inconsistency in argument name
                 D("deviceOnOff() action SetLoadLevelTarget for device %1 returned %2 %3", targetId, rc, rs)
             elseif luup.device_supports_service( SWITCH_SID , targetId ) then
                 D("deviceOnOff() handling %1 (%2) as SwitchPower1, setting target=%3", targetId, desc, state)
-                local rc, rs = luup.call_action("urn:upnp-org:serviceId:SwitchPower1", "SetTarget", { newTargetValue=targetVal }, targetId)
+                local rc, rs = luup.call_action("urn:upnp-org:serviceId:SwitchPower1", "SetTarget",
+                    { newTargetValue=targetVal }, targetId)
                 D("deviceOnOff() action SetTarget for device %1 returned %2 %3", targetId, rc, rs)
             elseif luup.devices[targetId].device_type == MYTYPE then
                 -- Yes, we can control another delay light!
@@ -735,25 +737,25 @@ local function plugin_runOnce( pdev )
     end
 
     -- Consider per-version changes.
-    if s < 00103 then 
+    if s < 00103 then
         L("Upgrading plugin %1 to 00103...", pdev)
         -- Conversion to 00103. Find all DLs incl this one and create a child
-        -- of this one for it. Link it via the OldDevice state variable, which 
+        -- of this one for it. Link it via the OldDevice state variable, which
         -- we'll detect separately.
         local ptr = luup.chdev.start( pdev )
         local count = 0
         for k,v in pairs(luup.devices) do
             if v.device_type == MYTYPE then
                 luup.variable_set(MYSID, "Version", 00103, k) -- do now, so no repeat
-                if k ~= pdev then 
+                if k ~= pdev then
                     luup.variable_set(MYSID, "Converted", 1, k)
                     luup.attr_set( "name", "X"..v.description, k )
                 else
                     luup.attr_set( "name", "DelayLight Plugin", k )
                 end
                 D("plugin_runOnce() creating child for %1 (%2)", k, luup.devices[k].description)
-                luup.chdev.append( pdev, ptr, "t"..k, v.description, TIMERTYPE, 
-                    "D_DelayLightTimer.xml", "", 
+                luup.chdev.append( pdev, ptr, "t"..k, v.description, TIMERTYPE,
+                    "D_DelayLightTimer.xml", "",
                     string.format("%s,%s=%d", TIMERSID, "OldDevice", k), false )
                 count = count + 1
             end
@@ -763,13 +765,13 @@ local function plugin_runOnce( pdev )
         L("RELOADING LUUP!")
         luup.reload()
     end
-    
-    if s < 00105 then 
+
+    if s < 00105 then
         L("Upgrading plugin %1 configuration to 00105...", pdev)
         luup.variable_set(MYSID, "NumChildren", 0, pdev)
         luup.variable_set(MYSID, "NumRunning", 0, pdev)
         luup.variable_set(MYSID, "Message", "", pdev)
-    end    
+    end
     -- Update version last.
     if (s ~= _CONFIGVERSION) then
         luup.variable_set(MYSID, "Version", _CONFIGVERSION, pdev)
@@ -782,7 +784,7 @@ function addTimer( pdev )
     local ptr = luup.chdev.start( pdev )
     for _,v in pairs(luup.devices) do
         if v.device_type == TIMERTYPE and v.device_num_parent == pdev then
-            luup.chdev.append( pdev, ptr, v.id, v.description, "", 
+            luup.chdev.append( pdev, ptr, v.id, v.description, "",
                 "D_DelayLightTimer.xml", "", "", false )
         end
     end
@@ -841,7 +843,7 @@ local function trigger( state, tdev )
         luup.variable_set( TIMERSID, "Timing", 1, tdev )
         luup.variable_set( TIMERSID, "OffTime", os.time() + onDelay + offDelay, tdev )
         scheduleDelay( scaleNextTick( onDelay + offDelay ), tdev )
-        
+
         -- Finally, if there's no onDelay, turn loads on. Do this last, so status
         -- is properly set so when watches start coming for devices, the watch knows
         -- it's a reaction to auto mode, not a manual start.
@@ -991,7 +993,7 @@ end
 -- Start plugin running.
 function startPlugin( pdev )
     L("Plugin version %2, device %1 (%3)", pdev, _PLUGIN_VERSION, luup.devices[pdev].description)
-    
+
     if luup.variable_get( MYSID, "Converted", pdev ) == "1" then
         L("This instance %1 (%2) has been converted to child; stopping.", pdev, luup.devices[pdev].description)
         luup.variable_set( MYSID, "Message", "Device upgraded. Delete this one!", pdev)
@@ -1058,7 +1060,7 @@ function startPlugin( pdev )
             count = count + 1
             L("Starting timer %1 (%2)", k, luup.devices[k].description)
             local success, err = pcall( startTimer, k, pdev )
-            if not success then 
+            if not success then
                 L({level=2,msg="Failed to start %1 (%2): %3"}, k, luup.devices[k].description, err)
             else
                 started = started + 1
@@ -1070,13 +1072,13 @@ function startPlugin( pdev )
     else
         luup.variable_set( MYSID, "Message", string.format("Started %d/%d at %s", started, count, os.date("%x %X")), pdev )
     end
-    
+
     -- Return success
     luup.set_failure( 0, pdev )
     return true, "Ready", _PLUGIN_NAME
 end
 
-local function timerTick(tdev)            
+local function timerTick(tdev)
     D("timerTick(%1)", tdev)
     local now = os.time()
     local status = luup.variable_get( TIMERSID, "Status", tdev ) or STATE_IDLE
@@ -1135,7 +1137,7 @@ local function timerTick(tdev)
             if n ~= nil then
                 L("Retrying load of scene %1", n)
                 -- Yes, this does not load the trigger map. That's a detail to be
-                -- sorted later. We don't know which list to put the scene on at 
+                -- sorted later. We don't know which list to put the scene on at
                 -- this point. ??? TO-DO
                 getSceneData( n, tdev )
                 break -- one at a time
@@ -1193,7 +1195,7 @@ function tick(p)
             D("tick() successful return from timerTick(%1)", t)
         end
     end
-    
+
     -- Things change while we work. Take another pass to find next task.
     local nextTick = nil
     for t,v in pairs(tickTasks) do
@@ -1203,7 +1205,7 @@ function tick(p)
             end
         end
     end
-    
+
     -- Figure out next master tick: soonest timer task tick, or 60 seconds
     local delay = 60
     if nextTick ~= nil then
