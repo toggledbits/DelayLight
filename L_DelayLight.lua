@@ -837,6 +837,7 @@ local function trigger( state, tdev )
         else
             -- Trigger manual
             offDelay = getVarNumeric( "ManualDelay", 3600, tdev )
+            if offDelay == 0 then return end -- 0 delay means no manual delay function
             luup.variable_set( TIMERSID, "OnTime", 0, tdev )
         end
         luup.variable_set( TIMERSID, "Status", state, tdev )
@@ -1087,6 +1088,8 @@ local function timerTick(tdev)
     D("timerTick(%1) Status %2 OffTime %3", tdev, status, offTime)
     local nextTick = 60
     if status ~= STATE_IDLE then
+        local holdOn = getVarNumeric( "HoldOn", 0, tdev )
+        local sensorTripped, which = isAnyTriggerOn( true, false, tdev )
         if onTime ~= 0 then
             if onTime > now then
                 local delay = onTime - now
@@ -1101,28 +1104,25 @@ local function timerTick(tdev)
                 setMessage( "Delay Off " .. formatTime(delay), tdev )
                 nextTick = scaleNextTick(delay)
             end
+        elseif holdOn == 2 and sensorTripped then
+            D("timerTick() hold-on mode 2 and sensor %1 (%2) still tripped", which, luup.devices[which].description)
+            setMessage( "Holding for " .. luup.devices[which].description, tdev )
+            nextTick = 2
         elseif offTime > now then
             -- Not our time yet...
             local delay = offTime - now
             D("timerTick() offTime %1, still %2 to go...", offTime, delay)
             setMessage( "Delay Off " .. formatTime(delay), tdev )
             nextTick = scaleNextTick(delay)
+        elseif holdOn == 1 and sensorTripped then
+            D("timerTick() hold-on mode 1 and sensor %1 (%2) still tripped", which, luup.devices[which].description)
+            setMessage( "Waiting for " .. luup.devices[which].description, tdev )
+            nextTick = 2
         else
-            -- Expired. Turn 'em off, unless hold on and a sensor is still tripped.
-            local holdOn = getVarNumeric( "HoldOn", 0, tdev )
-            local sensorTripped, which = isAnyTriggerOn( true, false, tdev )
-            if holdOn ~= 0 and sensorTripped then
-                D("timerTick() offTime %1 (past) but hold on and sensor %2 still tripped", offTime, which)
-                setMessage( "Held on by " .. luup.devices[which].description, tdev )
-                L("Timer %1 (%2) expired, but held on by %3 (%4)", tdev, luup.devices[tdev].description,
-                    which, luup.devices[which].description)
-                nextTick = 60 -- doesn't matter because state change on sensor to untriggered will re-evaluate for reset.
-            else
-                -- Not holding or no sensors still triggered
-                L("Timer %1 (%2) expired, resetting.", tdev, luup.devices[tdev].description)
-                reset( true, tdev )
-                nextTick = nil
-            end
+            -- Expired. 
+            L("Timer %1 (%2) expired, resetting.", tdev, luup.devices[tdev].description)
+            reset( true, tdev )
+            nextTick = nil
         end
     else
         -- idle
@@ -1287,21 +1287,16 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
                     local holdOn = getVarNumeric( "HoldOn", 0, tdev )
                     local offTime = getVarNumeric( "OffTime", 0, tdev )
                     D("timerWatch() trigger reset in %4, HoldOn=%1, offTime=%2, passed=%3", holdOn, offTime, offTime <= os.time(), status)
-                    if holdOn ~= 0 and offTime <= os.time() and not isAnyTriggerOn( true, false, tdev ) then
-                        local left, ldev = isAnyTriggerOn( true, false, tdev )
-                        D("timerWatch() past offTime with hold, anyOn=%1 (%2)", left, ldev)
-                        if not left then
-                            -- A sensor has reset, we're not idle, hold is on, and we're past offTime, and all SENSORS (only) are now off...
-                            L("Timer %1 (%2) end of hold (%3)", tdev, myname, holdOn)
-                            if holdOn == 2 then
-                                -- When HoldOn = 2, extend off time beyond untrip. Otherwise, reset.
-                                trigger( status, tdev )
-                            else
-                                reset( true, tdev )
-                            end
-                        else
-                            L("Timer %1 (%2) holding for %3 (%4) (and maybe others)",
-                                tdev, myname, ldev, luup.devices[ldev].description)
+                    local left, ldev = isAnyTriggerOn( true, false, tdev )
+                    if holdOn ~= 0 and not left then
+                        -- Now no more trigger devices on
+                        L("Timer %1 (%2) end of hold (%3)", tdev, myname, holdOn)
+                        if holdOn == 2 then
+                            -- When HoldOn = 2, extend off time beyond untrip.
+                            trigger( status, tdev )
+                        elseif offTime <= os.time() then
+                            -- HoldOn == 1, time expired, immediate reset
+                            reset( false, tdev )
                         end
                     end
                 end

@@ -65,7 +65,7 @@
 					"top": "0",
 					"left": "0",
 					"Label": {
-						"lang_tag": "cmd_off",
+						"lang_tag": "cmd_reset",
 						"text": "Reset"
 					},
 					"Display": {

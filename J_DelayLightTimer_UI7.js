@@ -501,7 +501,7 @@ var DelayLightTimer = (function(api) {
             
             html += '<div class="row"><div class="col-sm-12"><h3>Automatic Timing Options</h3>These options apply to automatic timing only.</div></div>';
             html += '<div class="row">';
-            html += '<div class="col-sm-12 col-md-6 col-lg-3"><h4>Hold-over</h4>When automatic timing expires:<br/><select class="tbholdon" id="holdon"><option value="0">Turn off "Off Devices" immediately</option><option value="1">Wait until all triggered sensors have reset (hold over)</option></select></div>';
+            html += '<div class="col-sm-12 col-md-6 col-lg-3"><h4>Hold-over Mode</h4>By default, "off" devices are turned off when timer expires (mode 0).<br/><select class="tbholdon" id="holdon"><option value="0">(0) Turn off "Off Devices" upon timer expiration</option><option value="1">(1) Do not turn off until timer expires and all triggered sensors have reset</option><option value="2">(2) Do not start off-delay timer until triggered sensors reset</option></select></div>';
             html += '<div class="col-sm-12 col-md-6 col-lg-3"><h4>"On" Delay</h4>When a trigger device trips, wait this many seconds before turning "On Devices" on:<br/><input class="tbnumeric" id="timer-on"></div>';
             html += '<div class="col-sm-12 col-md-6 col-lg-3 housemodes"><h4>House Modes</h4>Only trigger in the selected house modes (any if no modes are selected):<br/><input type="checkbox" class="tbhousemode" id="mode1">Home <input type="checkbox" class="tbhousemode" id="mode2">Away <input type="checkbox" class="tbhousemode" id="mode3">Night <input type="checkbox" class="tbhousemode" id="mode4">Vacation</div>';
             html += '</div>'; /* row */
