@@ -1,4 +1,3 @@
---luacheck: std lua51,module,read globals luup,ignore 542 611 612 614 111/_,no max line length
 --[[
     L_DelayLight.lua - Core module for DelayLight
     Copyright 2017,2018 Patrick H. Rigney, All Rights Reserved.
@@ -7,15 +6,16 @@
     TO DO/CONSIDER:
         1. Right now, sensor trip starts complete cycle, no interruption. Allow optional reset during on delay if all sensors reset.
 --]]
+--luacheck: std lua51,module,read globals luup,ignore 542 611 612 614 111/_,no max line length
 
 module("L_DelayLight", package.seeall)
 
-local debugMode = false
+local debugMode = true
 
 local _PLUGIN_NAME = "DelayLight"
 local _PLUGIN_VERSION = "1.3dev"
-local _PLUGIN_URL = "http://www.toggledbits.com/delaylight"
-local _CONFIGVERSION = 00105
+local _PLUGIN_URL = "https://www.toggledbits.com/delaylight"
+local _CONFIGVERSION = 00106
 
 local MYSID = "urn:toggledbits-com:serviceId:DelayLight"
 local MYTYPE = "urn:schemas-toggledbits-com:device:DelayLight:1"
@@ -32,6 +32,7 @@ local DIMMER_SID  = "urn:upnp-org:serviceId:Dimming1"
 STATE_IDLE = "idle"
 STATE_MANUAL = "man"
 STATE_AUTO = "auto"
+STATE_NONE = nil
 
 local runStamp = 0
 local pluginDevice = 0
@@ -194,6 +195,10 @@ local function clearTimerState( tdev )
     timerState[tostring(tdev)] = {
         pollList={},
         triggerMap = {},
+        triggers={},
+        on={},
+        off={},
+        inhibit={},
         eventList = {}
     }
 end
@@ -329,11 +334,14 @@ end
 
 -- Interpret a trigger device spec to number and invert flag
 local function toDevnum( val )
+    D("toDevnum(%1)", val)
     local invert = false
-    local devnum = tonumber(val,10)
+    local v = string.match( val, "(%d+)=")
+    if v ~= nil then val = v end
+    local devnum = tonumber(val, 10)
     if devnum == nil then return nil end
     if devnum < 0 then devnum = -devnum invert = true end
-    if luup.devices[devnum] == nil then return end
+    if luup.devices[devnum] == nil then return nil end
     return devnum, invert
 end
 
@@ -390,7 +398,9 @@ end
 
 -- Set up watches for triggers (if they aren't already watched)
 local function watchTriggers( tdev )
-    for nn, ix in pairs( timerState[tostring(tdev)].triggerMap ) do
+    D("watchTriggers(%1)", tdev)
+    for _,ix in pairs( timerState[tostring(tdev)].triggerMap ) do
+        local nn = ix.device
         if luup.devices[nn] == nil then
             L({level=2,msg="Device %1 not found... it may have been deleted!"}, nn)
         elseif not (ix.watched or false) then
@@ -443,7 +453,7 @@ local function loadTriggerMapFromScene( scene, list, tdev )
             L({level=2,msg="Device %1 used in scene %2 (%3) not found in luup.devices. Maybe it got deleted? Skipping."}, deviceNum, scd.id, scd.description)
         elseif isSwitchType( deviceNum, nil, tdev ) or luup.devices[deviceNum].device_type == MYTYPE then
             -- Something we can handle natively.
-            timerState[tostring(tdev)].triggerMap[deviceNum] = { trigger=STATE_MANUAL, invert=false, ['type']="load", list=list }
+            timerState[tostring(tdev)].triggerMap[list .. deviceNum] = { device=deviceNum, invert=false, list=list }
         else
             -- Not a configured/able device, so we can't watch it.
             local ld = luup.devices[deviceNum]
@@ -550,8 +560,8 @@ end
 
 -- Figure out if a device is on, our way.
 local function isDeviceOn( devnum, dinfo, newVal, tdev )
+    D("isDeviceOn(%1,%2,%3,%4)", devnum, dinfo, newVal, tdev)
     assert(type(devnum)=="number")
-    dinfo = dinfo or timerState[tostring(tdev)].triggerMap[devnum]
     assert(dinfo ~= nil)
     assert(type(tdev)=="number")
     if newVal == nil then newVal = luup.variable_get( dinfo.service, dinfo.variable, devnum ) end
@@ -578,9 +588,10 @@ local function isAnyTriggerOn( includeSensors, includeLoads, tdev )
     assert( type(includeSensors) == "boolean" )
     assert( type(includeLoads) == "boolean" )
     assert( tdev ~= nil )
-    for devnum,dinfo in pairs(timerState[tostring(tdev)].triggerMap) do
+    for _,dinfo in pairs(timerState[tostring(tdev)].triggerMap) do
+        local devnum = dinfo.device
         if luup.devices[devnum] ~= nil and luup.is_ready(devnum) then
-            local doCheck = ( includeSensors and dinfo.type == "trigger" ) or ( includeLoads and dinfo.type == "load" )
+            local doCheck = ( includeSensors and dinfo.list == "trigger" ) or ( includeLoads and ( dinfo.list == "on" or dinfo.list == "off" ) )
             if doCheck then
 --[[
                 local pp = getVarNumeric( "PollSettings", 60, devnum, "urn:micasaverde-com:serviceId:ZWaveDevice1" )
@@ -603,6 +614,27 @@ local function isAnyTriggerOn( includeSensors, includeLoads, tdev )
     return false
 end
 
+-- Check to see if any inhibitor device is tripped
+local function isInhibited( tdev )
+    assert( tdev ~= nil )
+    for _,dinfo in pairs(timerState[tostring(tdev)].triggerMap) do
+        local devnum = dinfo.device
+        if dinfo.list == "inhibit" then
+            if luup.devices[devnum] ~= nil and luup.is_ready(devnum) then
+                if isDeviceOn( devnum, dinfo, nil, tdev ) then
+                    D("isInhibited() device %1 (%2) is ON, inhibiting trigger", devnum, 
+                        luup.devices[devnum].description)
+                    return true, dinfo
+                end
+            else
+                D("isInhibited() device %1 (%2) does not exist or is not ready; ignoring.",
+                    devnum, luup.devices[devnum])
+            end
+        end
+    end
+    return false -- None tripped/on
+end
+
 -- Return whether item is on list (table as array)
 local function isOnList( l, e )
     if l == nil or e == nil then return false end
@@ -610,6 +642,29 @@ local function isOnList( l, e )
         if v == e then return true, n end
     end
     return false
+end
+
+-- Active time period?
+local function isActivePeriod( tdev )
+    local tList = split( luup.variable_get( TIMERSID, "ActivePeriods", tdev ) or "" )
+    if #tList > 0 then
+        local now = os.date( "*t" )
+        now = now.hour * 60 + now.min
+        for _,ix in pairs(tList) do
+            local hs,ms,he,me = string.match( ix, "^(%d%d)(%d%d)-(%d%d)(%d%d)" ) -- HHMM-HHMM
+            if hs ~= nil then
+                hs = tonumber(hs)*60 + tonumber(ms)
+                he = tonumber(he)*60 + tonumber(me)
+                if he < hs and (now >= hs or now < he) then -- wraps midnight
+                    return true
+                elseif now >= hs and now < he then 
+                    return true
+                end
+            end
+        end
+        return false -- none of the time periods matched
+    end
+    return true -- empty list means always active
 end
 
 -- Active house mode?
@@ -630,7 +685,8 @@ end
 local function checkPoll( lp, tdev )
     L("Polling devices...")
     local now = os.time()
-    for devnum in pairs(timerState[tostring(tdev)].triggerMap) do
+    for _,dd in pairs(timerState[tostring(tdev)].triggerMap) do
+        local devnum = dd.device
         if luup.devices[devnum] ~= nil and luup.device_supports_service("urn:micasaverde-com:serviceId:ZWaveDevice1", devnum) and not isOnList( timerState[tostring(tdev)].pollList, devnum ) then
             local pp = getVarNumeric( "PollSettings", 900, devnum, "urn:micasaverde-com:serviceId:ZWaveDevice1" )
             if pp ~= 0  then
@@ -705,13 +761,19 @@ local function timer_runOnce( tdev )
             luup.variable_set( TIMERSID, "ForcePoll", 0, tdev )
             luup.variable_set( TIMERSID, "LastTrigger", "", tdev )
             luup.variable_set( TIMERSID, "HouseModes", "", tdev )
+            luup.variable_set( TIMERSID, "InhibitDevices", "", tdev )
+            luup.variable_set( TIMERSID, "ActivePeriods", "", tdev )
         end
         luup.variable_set( TIMERSID, "Version", _CONFIGVERSION, tdev )
         return
     end
 
     -- Consider per-version changes.
-    -- None at the moment.
+    if s < 00106 then
+        L("Upgrading timer %1 (%2) to 00106", tdev, luup.devices[tdev].description)
+        luup.variable_set( TIMERSID, "InhibitDevices", "", tdev )
+        luup.variable_set( TIMERSID, "ActivePeriods", "", tdev )
+    end
 
     -- Update version last.
     if (s ~= _CONFIGVERSION) then
@@ -772,6 +834,12 @@ local function plugin_runOnce( pdev )
         luup.variable_set(MYSID, "NumRunning", 0, pdev)
         luup.variable_set(MYSID, "Message", "", pdev)
     end
+    
+    if s < 00106 then
+        L("Upgrading plugin %1 configuration to 00106...", pdev)
+        -- Nothing
+    end
+    
     -- Update version last.
     if (s ~= _CONFIGVERSION) then
         luup.variable_set(MYSID, "Version", _CONFIGVERSION, pdev)
@@ -810,7 +878,25 @@ local function trigger( state, tdev )
     assert(luup.devices[tdev] and luup.devices[tdev].device_type == TIMERTYPE)
 
     -- If we're disabled, this function has no effect.
-    if not isEnabled( tdev ) then return end
+    if not isEnabled( tdev ) then 
+        D("trigger() disabled, no triggering.")
+        setMessage("Disabled", tdev)
+        return 
+    end
+    
+    -- If we're not in active period, no effect.
+    if not isActivePeriod( tdev ) then
+        D("trigger() inactive period, not triggering.")
+        setMessage("Inactive period", tdev)
+        return
+    end
+    
+    -- If inhibited by device, no effect.
+    if isInhibited( tdev ) then 
+        D("trigger() inhibited, not triggering.")
+        setMessage("Inhibited", tdev)
+        return 
+    end
 
     addEvent{ event="trigger", dev=tdev, state=state }
 
@@ -945,19 +1031,29 @@ local function startTimer( tdev, pdev )
 
     -- Set up our lists of Triggers and Onlist devices.
     local triggers = split( luup.variable_get( TIMERSID, "Triggers", tdev ) or "" )
-    timerState[tostring(tdev)].triggerMap = map( triggers, function( ix, v ) local dev,inv dev,inv = toDevnum(v) return dev, { trigger=STATE_AUTO, invert=inv, ['type']="trigger", list="triggers" } end, nil )
+    timerState[tostring(tdev)].triggerMap = map( triggers, 
+        function( ix, v ) local dev,inv = toDevnum(v) return "trigger" .. tostring(dev), { device=dev, invert=inv, list="trigger" } end, 
+        nil, false )
     local l = split( luup.variable_get( TIMERSID, "OnList", tdev ) or "" )
     if #l > 0 and l[1]:sub(1,1) == "S" then
         loadTriggerMapFromScene( tonumber(l[1]:sub(2)), "on", tdev )
     else
-        timerState[tostring(tdev)].triggerMap = map( l, function( ix, v ) local dev = toDevnum(v) return dev, { trigger=STATE_MANUAL, invert=false, ['type']="load", list="on" } end, timerState[tostring(tdev)].triggerMap, false )
+        timerState[tostring(tdev)].triggerMap = map( l, 
+            function( ix, v ) local dev = toDevnum(v) return "on" .. tostring(dev), { device=dev, invert=false, list="on" } end, 
+            timerState[tostring(tdev)].triggerMap, false )
     end
     l = split( luup.variable_get( TIMERSID, "OffList", tdev ) or "" )
     if #l > 0 and l[1]:sub(1,1) == "S" then
         loadTriggerMapFromScene( tonumber(l[1]:sub(2)), "off", tdev )
     else
-        timerState[tostring(tdev)].triggerMap = map( l, function( ix, v ) local dev = toDevnum(v) return dev, { trigger=STATE_MANUAL, invert=false, ['type']="load", list="off" } end, timerState[tostring(tdev)].triggerMap, false )
+        timerState[tostring(tdev)].triggerMap = map( l, 
+            function( ix, v ) local dev = toDevnum(v) return "off" .. tostring(dev), { device=dev, invert=false, list="off" } end, 
+            timerState[tostring(tdev)].triggerMap, false )
     end
+    l = split( luup.variable_get( TIMERSID, "InhibitDevices", tdev ) or "" )
+    timerState[tostring(tdev)].triggerMap = map( l, 
+        function( ix, v ) local dev,inv = toDevnum(v) return "inhibit" .. tostring(dev), { device=dev, invert=inv, list="inhibit" } end, 
+        timerState[tostring(tdev)].triggerMap, false )
 
     -- Watch 'em.
     watchTriggers( tdev )
@@ -1237,8 +1333,13 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
             setMessage( formatTime(delay), tdev )
         end
     else
-        local dinfo = timerState[tostring(tdev)].triggerMap[dev]
+        -- We respond to edges. The value has to change for us to actually care...
+        if oldVal == newVal then return end
+
+        local dinfo = timerState[tostring(tdev)].triggerMap["trigger"..dev]
         if dinfo ~= nil then
+            -- Trigger device is changing state.
+            
             -- Make sure it's our status trigger service/variable
             if sid ~= dinfo.service or var ~= dinfo.variable then return end -- not something we handle
 
@@ -1249,60 +1350,83 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
 
             addEvent{ event="watch", dev=tdev, device=dev, service=sid, variable=var, old=oldVal, new=newVal, triggered=trig }
 
-            -- We respond to edges. The value has to change for us to actually care...
-            if oldVal == newVal then return end
-
             -- Now...
             if trig then
                 -- Save trigger info
                 luup.variable_set( TIMERSID, "LastTrigger",
                     table.concat({ dev, os.time(), newVal, sid, var}, ","), tdev)
-                -- And evaluate
-                if status == STATE_AUTO and dinfo.type == "load" and dinfo.list == "on" then
-                    -- "OnList" load turning on while in auto--that's probably us doing it, so ignore.
-                    return
-                else
-                    -- Trigger for type
-                    L("Timer %6 (%7) %1 triggering by %2 %3 %4 (%5)", dinfo.trigger, dinfo.list, dinfo.type,
-                        dev, luup.devices[dev].description, tdev, myname)
-                    trigger( dinfo.trigger, tdev )
-                end
-            else
-                -- Something is turning off.
-                if dinfo.type == "load" and not isAnyTriggerOn( false, true, tdev ) then
-                    D("timerWatch() all loads now off in state %1, reset.", status)
-                    if status ~= STATE_IDLE then
-                        L("Timer %1 (%2) all loads off, timer resetting from %3.", tdev, luup.devices[tdev].description, status)
-                        -- We use resetTimer() here rather than reset(), because reset() sends all
-                        -- loads off. That's a problem for polled/non-instant loads, because
-                        -- we can get an "off" watch call for a polled load but the next polled
-                        -- load in the same config might be "on", but that isn't seen until a
-                        -- later poll (the human in the room sees two loads on, and one
-                        -- was turned off, and then the other goes off mysteriously before timer
-                        -- expires)
-                        resetTimer( tdev )
-                    end
-                elseif dinfo.type == "trigger" and status ~= STATE_IDLE then
-                    -- Trigger device turning off in active state.
-                    local holdOn = getVarNumeric( "HoldOn", 0, tdev )
-                    local offTime = getVarNumeric( "OffTime", 0, tdev )
-                    D("timerWatch() trigger reset in %4, HoldOn=%1, offTime=%2, passed=%3", holdOn, offTime, offTime <= os.time(), status)
-                    local left, ldev = isAnyTriggerOn( true, false, tdev )
-                    if holdOn ~= 0 and not left then
-                        -- Now no more trigger devices on
-                        L("Timer %1 (%2) end of hold (%3)", tdev, myname, holdOn)
-                        if holdOn == 2 then
-                            -- When HoldOn = 2, extend off time beyond untrip.
-                            trigger( status, tdev )
-                        elseif offTime <= os.time() then
-                            -- HoldOn == 1, time expired, immediate reset
-                            reset( false, tdev )
-                        end
+                    
+                -- Trigger for type
+                L("Timer %1 (%2) AUTO triggering by list %3 dev %4 (%5)", tdev, myname, 
+                    dinfo.list, dev, luup.devices[dev].description)
+                trigger( STATE_AUTO, tdev )
+            elseif status ~= STATE_IDLE then
+                -- Tripped trigger device is resetting in active state
+                local holdOn = getVarNumeric( "HoldOn", 0, tdev )
+                local offTime = getVarNumeric( "OffTime", 0, tdev )
+                D("timerWatch() trigger reset in %4, HoldOn=%1, offTime=%2, passed=%3", holdOn, offTime, offTime <= os.time(), status)
+                local left, ldev = isAnyTriggerOn( true, false, tdev )
+                if holdOn ~= 0 and not left then
+                    -- Now no more trigger devices on
+                    L("Timer %1 (%2) end of hold (%3)", tdev, myname, holdOn)
+                    if holdOn == 2 then
+                        -- When HoldOn = 2, extend off time beyond untrip.
+                        trigger( status, tdev )
+                    elseif offTime <= os.time() then
+                        -- HoldOn == 1, time expired, immediate reset
+                        reset( false, tdev )
                     end
                 end
             end
         else
-            D("timerWatch() no triggerMap information for %1 (%2)", dev, luup.devices[dev])
+            -- It wasn't a trigger device. Maybe it's "on" list?
+            dinfo = timerState[tostring(tdev)].triggerMap["on"..dev]
+            if dinfo == nil then dinfo = timerState[tostring(tdev)].triggerMap["off"..dev] end -- blech. Needs work. ???
+            if dinfo ~= nil then 
+                -- Make sure it's our service/variable
+                if sid ~= dinfo.service or var ~= dinfo.variable then return end -- not something we handle
+
+                -- We're good. Interpret status.
+                D("timerWatch() triggerMap[%1]=%2, newVal=%3 (%4)", dev, dinfo, newVal, luup.devices[dev].description)
+                local trig = isDeviceOn( dev, dinfo, newVal, tdev )
+                D("timerWatch() device %1 trigger state is %2", dev, trig)
+
+                addEvent{ event="watch", dev=tdev, device=dev, service=sid, variable=var, old=oldVal, new=newVal, triggered=trig }
+
+                if trig then
+                    -- Turning on.
+                    if status == STATE_AUTO then return end -- "on" list device turning on in AUTO, probably us doing it
+                    
+                    -- Save trigger info
+                    luup.variable_set( TIMERSID, "LastTrigger",
+                        table.concat({ dev, os.time(), newVal, sid, var}, ","), tdev)
+
+                    -- Trigger manual
+                    L("Timer %1 (%2) MANUAL triggering by list %3 dev %4 (%5)", tdev, myname, 
+                        dinfo.list, dev, luup.devices[dev].description)
+                    trigger( STATE_MANUAL, tdev )
+                else
+                    -- Something is turning off.
+                    if not isAnyTriggerOn( false, true, tdev ) then
+                        -- All loads are now off.
+                        D("timerWatch() all loads now off in state %1, reset.", status)
+                        if status ~= STATE_IDLE then
+                            L("Timer %1 (%2) all loads off, timer resetting from %3.", tdev, luup.devices[tdev].description, status)
+                            -- We use resetTimer() here rather than reset(), because reset() sends all
+                            -- loads off. That's a problem for polled/non-instant loads, because
+                            -- we can get an "off" watch call for a polled load but the next polled
+                            -- load in the same config might be "on", but that isn't seen until a
+                            -- later poll (the human in the room sees two loads on, and one
+                            -- was turned off, and then the other goes off mysteriously before timer
+                            -- expires)
+                            resetTimer( tdev )
+                        end
+                    -- else -- Something is still on. Just go with it.
+                    end
+                end
+            else
+                D("timerWatch() ignoring device change, must be inhibit or off list")
+            end
         end
     end
 end
