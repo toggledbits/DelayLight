@@ -106,7 +106,8 @@ end
 
 local function checkVersion(dev)
     local ui7Check = luup.variable_get(MYSID, "UI7Check", dev) or ""
-    if isOpenLuup or (luup.version_branch == 1 and luup.version_major >= 7) then
+    if isOpenLuup and debugMode then return true end -- back to development, new openLuup breaks context
+    if (luup.version_branch == 1 and luup.version_major >= 7) then
         if ui7Check == "" then
             -- One-time init for UI7 or better
             luup.variable_set(MYSID, "UI7Check", "true", dev)
@@ -191,11 +192,11 @@ end
 
 -- Create empty context for new timer device
 local function clearTimerState( tdev )
+    D("clearTimerState(%1)", tdev)
     if timerState == nil then timerState = {} end
     timerState[tostring(tdev)] = {
         pollList={},
-        triggerMap = {},
-        triggers={},
+        trigger={},
         on={},
         off={},
         inhibit={},
@@ -397,12 +398,12 @@ local function watchVariable( sid, var, target, tdev )
 end
 
 -- Set up watches for triggers (if they aren't already watched)
-local function watchTriggers( tdev )
-    D("watchTriggers(%1)", tdev)
-    for _,ix in pairs( timerState[tostring(tdev)].triggerMap ) do
+local function watchMap( m, tdev )
+    D("watchTriggers(%1,%2)", m, tdev)
+    for _,ix in pairs( m ) do
         local nn = ix.device
         if luup.devices[nn] == nil then
-            L({level=2,msg="Device %1 not found... it may have been deleted!"}, nn)
+            L({level=2,msg="Device %1 (%2 list) not found... it may have been deleted!"}, nn, ix.list)
         elseif not (ix.watched or false) then
             if isSensorType( nn, nil, tdev ) then -- Security/binary sensor (has tripped/non-tripped)
                 D("watchTriggers(): watching %1 (%2) as sensor", nn, luup.devices[nn].description)
@@ -426,8 +427,8 @@ local function watchTriggers( tdev )
                 ix.valueOn = "1"
                 ix.watched = true
             else
-                L({level=2,msg="Device %1 (%2) doesn't seem to be a sensor or controllable load. Ignoring."},
-                    nn, luup.devices[nn].description)
+                L({level=2,msg="Device %3 %1 (%2) doesn't seem to be a sensor or controllable load. Ignoring."},
+                    nn, luup.devices[nn].description, ix.list)
             end
         else
             D("watchTriggers() device %1 (%2) already on watch", nn, luup.devices[nn])
@@ -435,9 +436,16 @@ local function watchTriggers( tdev )
     end
 end
 
+local function watchTriggers( tdev ) 
+    watchMap( timerState[tostring(tdev)].trigger, tdev )
+    watchMap( timerState[tostring(tdev)].on, tdev )
+    watchMap( timerState[tostring(tdev)].off, tdev )
+    -- We don't watch inhibits, we just look at them as needed
+end
+
 -- Load a scene into the trigger map.
-local function loadTriggerMapFromScene( scene, list, tdev )
-    D("loadTriggerMapFromScene(%1,%2,%3)", scene, list, tdev)
+local function loadTriggerMapFromScene( scene, m, list, tdev )
+    D("loadTriggerMapFromScene(%1,%2,%3,%4)", scene, m, list, tdev)
     local scd = getSceneData( scene, tdev )
     if scd == nil then return end -- can't load (retry later)
 
@@ -453,7 +461,7 @@ local function loadTriggerMapFromScene( scene, list, tdev )
             L({level=2,msg="Device %1 used in scene %2 (%3) not found in luup.devices. Maybe it got deleted? Skipping."}, deviceNum, scd.id, scd.description)
         elseif isSwitchType( deviceNum, nil, tdev ) or luup.devices[deviceNum].device_type == MYTYPE then
             -- Something we can handle natively.
-            timerState[tostring(tdev)].triggerMap[list .. deviceNum] = { device=deviceNum, invert=false, list=list }
+            m[deviceNum] = { device=deviceNum, invert=false, list=list }
         else
             -- Not a configured/able device, so we can't watch it.
             local ld = luup.devices[deviceNum]
@@ -566,7 +574,7 @@ local function isDeviceOn( devnum, dinfo, newVal, tdev )
     assert(type(tdev)=="number")
     if newVal == nil then newVal = luup.variable_get( dinfo.service, dinfo.variable, devnum ) end
 
-    -- dinfo, which contains the triggerMap data for this device, as enough information that we can use
+    -- dinfo, which contains the trigger map data for this device, as enough information that we can use
     -- it exclusively to see what our device state is.
     local testValues = dinfo.valueOn or "1"
     if type(testValues) ~= "table" then testValues = { testValues } end
@@ -583,53 +591,65 @@ local function isDeviceOn( devnum, dinfo, newVal, tdev )
     return false
 end
 
+-- Given a device map, return true if any device is "on"
+local function isMapDeviceOn( m, tdev )
+    D("isMapDeviceOn(%1,%2)", m, tdev )
+    for _,dinfo in pairs(m) do
+        local devnum = dinfo.device
+        if luup.devices[devnum] ~= nil and luup.is_ready(devnum) then
+--[[
+            local pp = getVarNumeric( "PollSettings", 60, devnum, "urn:micasaverde-com:serviceId:ZWaveDevice1" )
+            if pp ~= 0  then
+                local dp = getVarNumeric( "LastPollSuccess", 0, devnum, "urn:micasaverde-com:serviceId:ZWaveNetwork1" )
+                if (os.time()-dp) > (2*pp) then
+                    L({level=2,prefix=_PLUGIN_NAME.."(PP): ",msg="device %1 (%2) overdue for poll; interval %3, last successful %4 ago"}, devnum, luup.devices[devnum].description, pp, os.time()-dp)
+                end
+            end
+--]]
+            local isOn = isDeviceOn( devnum, dinfo, nil, tdev )
+            if isOn ~= nil and isOn then
+                return true, devnum -- nothing more to do
+            end
+        else
+            L("Device %1 (%2 list) not found in luup.devices or not ready, skipping.", devnum, dinfo.list)
+        end
+    end
+    return false
+end
+
 -- Return true if any device in a selected list is on (loads, sensors)
 local function isAnyTriggerOn( includeSensors, includeLoads, tdev )
     assert( type(includeSensors) == "boolean" )
     assert( type(includeLoads) == "boolean" )
     assert( tdev ~= nil )
-    for _,dinfo in pairs(timerState[tostring(tdev)].triggerMap) do
-        local devnum = dinfo.device
-        if luup.devices[devnum] ~= nil and luup.is_ready(devnum) then
-            local doCheck = ( includeSensors and dinfo.list == "trigger" ) or ( includeLoads and ( dinfo.list == "on" or dinfo.list == "off" ) )
-            if doCheck then
---[[
-                local pp = getVarNumeric( "PollSettings", 60, devnum, "urn:micasaverde-com:serviceId:ZWaveDevice1" )
-                if pp ~= 0  then
-                    local dp = getVarNumeric( "LastPollSuccess", 0, devnum, "urn:micasaverde-com:serviceId:ZWaveNetwork1" )
-                    if (os.time()-dp) > (2*pp) then
-                        L({level=2,prefix=_PLUGIN_NAME.."(PP): ",msg="device %1 (%2) overdue for poll; interval %3, last successful %4 ago"}, devnum, luup.devices[devnum].description, pp, os.time()-dp)
-                    end
-                end
---]]
-                local isOn = isDeviceOn( devnum, dinfo, nil, tdev )
-                if isOn ~= nil and isOn then
-                    return true, devnum -- nothing more to do
-                end
-            end
-        else
-            L("Trigger device %1 not found in luup.devices or not ready, skipping.", devnum)
-        end
+    if includeSensors and isMapDeviceOn( timerState[tostring(tdev)].trigger, tdev ) then
+        return true
+    end
+    if includeLoads and isMapDeviceOn( timerState[tostring(tdev)].on, tdev ) then
+        return true
+    end
+    if includeLoads and isMapDeviceOn( timerState[tostring(tdev)].off, tdev ) then
+        return true
     end
     return false
 end
 
 -- Check to see if any inhibitor device is tripped
 local function isInhibited( tdev )
+    D("isInhibited(%1)", tdev)
     assert( tdev ~= nil )
-    for _,dinfo in pairs(timerState[tostring(tdev)].triggerMap) do
+    D("timerState = %1", timerState)
+    for _,dinfo in pairs(timerState[tostring(tdev)].inhibit) do
         local devnum = dinfo.device
-        if dinfo.list == "inhibit" then
-            if luup.devices[devnum] ~= nil and luup.is_ready(devnum) then
-                if isDeviceOn( devnum, dinfo, nil, tdev ) then
-                    D("isInhibited() device %1 (%2) is ON, inhibiting trigger", devnum, 
-                        luup.devices[devnum].description)
-                    return true, dinfo
-                end
-            else
-                D("isInhibited() device %1 (%2) does not exist or is not ready; ignoring.",
-                    devnum, luup.devices[devnum])
+        if luup.devices[devnum] ~= nil and luup.is_ready(devnum) then
+            if isDeviceOn( devnum, dinfo, nil, tdev ) then
+                D("isInhibited() device %1 (%2) is ON, inhibiting trigger", devnum, 
+                    luup.devices[devnum].description)
+                return true, dinfo
             end
+        else
+            D("isInhibited() device %1 (%2) does not exist or is not ready; ignoring.",
+                devnum, luup.devices[devnum])
         end
     end
     return false -- None tripped/on
@@ -681,37 +701,56 @@ local function isActiveHouseMode( tdev )
     return false
 end
 
+-- Return array of keys for a map (table). Pass array or new is created.
+local function getKeys( m, r ) 
+    if r == nil then r = {} end
+    local seen = {}
+    for k,_ in m do
+        if seen[k] == nil then
+            table.insert( r, k )
+            seen[k] = true
+        end
+    end
+    return r
+end
+
 -- Check polling time for all devices
 local function checkPoll( lp, tdev )
     L("Polling devices...")
     local now = os.time()
-    for _,dd in pairs(timerState[tostring(tdev)].triggerMap) do
-        local devnum = dd.device
-        if luup.devices[devnum] ~= nil and luup.device_supports_service("urn:micasaverde-com:serviceId:ZWaveDevice1", devnum) and not isOnList( timerState[tostring(tdev)].pollList, devnum ) then
+    local tState = timerState[tostring(tdev)]
+    local alldevs = getKeys( timerState[tostring(tdev)].trigger )
+    alldevs = getKeys( timerState[tostring(tdev)].on )
+    alldevs = getKeys( timerState[tostring(tdev)].off )
+    alldevs = getKeys( timerState[tostring(tdev)].inhibit )
+    for _,devnum in ipairs( alldevs ) do
+        local ld = luup.devices[devnum]
+        if ld ~= nil and luup.device_supports_service("urn:micasaverde-com:serviceId:ZWaveDevice1", devnum) and 
+                not isOnList( tState.pollList, devnum ) then
             local pp = getVarNumeric( "PollSettings", 900, devnum, "urn:micasaverde-com:serviceId:ZWaveDevice1" )
             if pp ~= 0  then
                 local dp = getVarNumeric( "LastPollSuccess", 0, devnum, "urn:micasaverde-com:serviceId:ZWaveNetwork1" )
-                if (now - dp) >= pp then
+                if (now - dp) > pp then
                     if luup.variable_get( "urn:micasaverde-com:serviceId:ZWaveDevice1", "WakeupInterval", devnum ) ~= nil then
-                        D("checkPoll() skipping forced poll on battery-operated device %1 (%2)", devnum, luup.devices[devnum].description)
+                        D("checkPoll() skipping forced poll on battery-operated device %1 (%2)", devnum, ld.description)
                     else
-                        D("checkPoll() queueing poll on device %1 (%2), last %3 (%4 ago)", devnum, luup.devices[devnum].description, dp, now-dp)
-                        table.insert(timerState[tostring(tdev)].pollList, devnum)
+                        D("checkPoll() queueing poll on device %1 (%2), last %3 (%4 ago)", devnum, ld.description, dp, now-dp)
+                        table.insert(tState.pollList, devnum)
                     end
                 end
             end
         else
-            D("checkPoll() skipping %1 (%2), not a ZWaveDevice", devnum, luup.devices[devnum].description)
+            D("checkPoll() skipping %1 (%2), not a ZWaveDevice", devnum, ld.description)
         end
     end
     -- Poll one device per check
     if #timerState[tostring(tdev)].pollList > 0 then
-        local devnum = table.remove(timerState[tostring(tdev)].pollList, 1)
+        local devnum = table.remove( tState.pollList, 1 )
         D("checkPoll() forcing poll on overdue device %1 (%2)", devnum, luup.devices[devnum].description)
         luup.call_action( "urn:micasaverde-com:serviceId:HaDevice1", "Poll", {}, devnum)
         luup.variable_set( TIMERSID, "LastPoll", now, tdev )
     end
-    return #timerState[tostring(tdev)].pollList > 0 -- true if there are still items on pollList
+    return #tState.pollList > 0 -- true if there are still items on pollList
 end
 
 -- Return the plugin version string
@@ -875,6 +914,7 @@ end
 
 local function trigger( state, tdev )
     D("trigger(%1,%2)", state, tdev)
+    assert(type(tdev)=="number")
     assert(luup.devices[tdev] and luup.devices[tdev].device_type == TIMERTYPE)
 
     -- If we're disabled, this function has no effect.
@@ -1031,30 +1071,34 @@ local function startTimer( tdev, pdev )
 
     -- Set up our lists of Triggers and Onlist devices.
     local triggers = split( luup.variable_get( TIMERSID, "Triggers", tdev ) or "" )
-    timerState[tostring(tdev)].triggerMap = map( triggers, 
-        function( ix, v ) local dev,inv = toDevnum(v) return "trigger" .. tostring(dev), { device=dev, invert=inv, list="trigger" } end, 
-        nil, false )
+    timerState[tostring(tdev)].trigger = map( triggers, 
+        function( ix, v ) local dev,inv = toDevnum(v) return dev, { device=dev, invert=inv, list="trigger" } end )
+    
+    -- "On" list
     local l = split( luup.variable_get( TIMERSID, "OnList", tdev ) or "" )
     if #l > 0 and l[1]:sub(1,1) == "S" then
-        loadTriggerMapFromScene( tonumber(l[1]:sub(2)), "on", tdev )
+        loadTriggerMapFromScene( tonumber(l[1]:sub(2)), timerState[tostring(tdev)].on, "on", tdev )
     else
-        timerState[tostring(tdev)].triggerMap = map( l, 
-            function( ix, v ) local dev = toDevnum(v) return "on" .. tostring(dev), { device=dev, invert=false, list="on" } end, 
-            timerState[tostring(tdev)].triggerMap, false )
+        timerState[tostring(tdev)].on = map( l, 
+            function( ix, v ) local dev = toDevnum(v) return dev, { device=dev, invert=false, list="on" } end )
     end
+    
+    -- "Off" list
     l = split( luup.variable_get( TIMERSID, "OffList", tdev ) or "" )
     if #l > 0 and l[1]:sub(1,1) == "S" then
-        loadTriggerMapFromScene( tonumber(l[1]:sub(2)), "off", tdev )
+        loadTriggerMapFromScene( tonumber(l[1]:sub(2)), timerState[tostring(tdev)].off, "off", tdev )
     else
-        timerState[tostring(tdev)].triggerMap = map( l, 
-            function( ix, v ) local dev = toDevnum(v) return "off" .. tostring(dev), { device=dev, invert=false, list="off" } end, 
-            timerState[tostring(tdev)].triggerMap, false )
+        timerState[tostring(tdev)].off = map( l, 
+            function( ix, v ) local dev = toDevnum(v) return dev, { device=dev, invert=false, list="off" } end )
     end
+    
+    -- Inhibits
     l = split( luup.variable_get( TIMERSID, "InhibitDevices", tdev ) or "" )
-    timerState[tostring(tdev)].triggerMap = map( l, 
-        function( ix, v ) local dev,inv = toDevnum(v) return "inhibit" .. tostring(dev), { device=dev, invert=inv, list="inhibit" } end, 
-        timerState[tostring(tdev)].triggerMap, false )
+    timerState[tostring(tdev)].inhibit = map( l, 
+        function( ix, v ) local dev,inv = toDevnum(v) return dev, { device=dev, invert=inv, list="inhibit" } end )
 
+    D("startTimer() init of timerState = %1", timerState[tostring(tdev)])
+    
     -- Watch 'em.
     watchTriggers( tdev )
 
@@ -1336,7 +1380,7 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
         -- We respond to edges. The value has to change for us to actually care...
         if oldVal == newVal then return end
 
-        local dinfo = timerState[tostring(tdev)].triggerMap["trigger"..dev]
+        local dinfo = timerState[tostring(tdev)].trigger[dev]
         if dinfo ~= nil then
             -- Trigger device is changing state.
             
@@ -1344,7 +1388,7 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
             if sid ~= dinfo.service or var ~= dinfo.variable then return end -- not something we handle
 
             -- We're good. Interpret status.
-            D("timerWatch() triggerMap[%1]=%2, newVal=%3 (%4)", dev, dinfo, newVal, luup.devices[dev].description)
+            D("timerWatch() triggers[%1]=%2, newVal=%3 (%4)", dev, dinfo, newVal, luup.devices[dev].description)
             local trig = isDeviceOn( dev, dinfo, newVal, tdev )
             D("timerWatch() device %1 trigger state is %2", dev, trig)
 
@@ -1379,15 +1423,15 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
                 end
             end
         else
-            -- It wasn't a trigger device. Maybe it's "on" list?
-            dinfo = timerState[tostring(tdev)].triggerMap["on"..dev]
-            if dinfo == nil then dinfo = timerState[tostring(tdev)].triggerMap["off"..dev] end -- blech. Needs work. ???
+            -- It wasn't a trigger device. See if it's on the "on" or "off" lists.
+            dinfo = timerState[tostring(tdev)].on[dev]
+            if dinfo == nil then dinfo = timerState[tostring(tdev)].off[dev] end
             if dinfo ~= nil then 
                 -- Make sure it's our service/variable
                 if sid ~= dinfo.service or var ~= dinfo.variable then return end -- not something we handle
 
                 -- We're good. Interpret status.
-                D("timerWatch() triggerMap[%1]=%2, newVal=%3 (%4)", dev, dinfo, newVal, luup.devices[dev].description)
+                D("timerWatch() device %1 %5 map=%2, newVal=%3 (%4)", dev, dinfo, newVal, luup.devices[dev].description, dinfo.list)
                 local trig = isDeviceOn( dev, dinfo, newVal, tdev )
                 D("timerWatch() device %1 trigger state is %2", dev, trig)
 
@@ -1450,6 +1494,7 @@ function watch( dev, sid, var, oldVal, newVal )
         end
     else
         L("Callback for unregistered key %1", key)
+        D("watch() watchData=%1", watchData)
     end
 end
 
@@ -1520,9 +1565,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
             if v.device_type == MYTYPE or v.device_type == TIMERTYPE then
                 local devinfo = getDevice( k, pluginDevice, v ) or {}
                 if v.device_type == TIMERTYPE then
-                    devinfo.triggerMap = timerState[tostring(k)].triggerMap
-                    devinfo.eventList = timerState[tostring(k)].eventList
-                    devinfo.pollList = timerState[tostring(k)].pollList
+                    devinfo.timerState = timerState[tostring(k)]
                 end
                 table.insert( st.devices, devinfo )
             end

@@ -17,6 +17,7 @@
         end
     </functions>
     <startup>startupDelayLight</startup>
+    <files>L_DelayLight.lua</files>
     <actionList>
         <action>
             <serviceId>urn:toggledbits-com:serviceId:DelayLightTimer</serviceId>
