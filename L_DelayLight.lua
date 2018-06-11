@@ -103,7 +103,15 @@ end
 
 local function checkVersion(dev)
     local ui7Check = luup.variable_get(MYSID, "UI7Check", dev) or ""
-    if isOpenLuup and debugMode then return true end -- back to development, new openLuup breaks context
+    if isOpenLuup then 
+        local s = luup.variable_get( "openLuup", "Version", 2 ) -- hardcoded device?
+        local y,m,d = string.match( s or "0.0.0", "^v(%d+)%.(%d+)%.(%d+)" )
+        local y = tonumber(y) * 10000 + tonumber(m)*100 + tonumber(d)
+        D("checkVersion() checking openLuup version=%1 (numeric %2)", s, y)
+        if y < 180400 or y >= 180611 then return true end -- See Github issue #5
+        L({level=1,msg="openLuup version %1 is not supported. Please upgrade openLuup. See Github issue #5."}, y);
+        return true 
+    end
     if (luup.version_branch == 1 and luup.version_major >= 7) then
         if ui7Check == "" then
             -- One-time init for UI7 or better
@@ -633,7 +641,7 @@ end
 
 -- Check to see if any inhibitor device is tripped
 local function isInhibited( tdev )
-    D("isInhibited(%1)", tdev) -- PHR180610
+    D("isInhibited(%1)", tdev) 
     assert( tdev ~= nil )
     D("timerState = %1", timerState)
     for _,dinfo in pairs(timerState[tostring(tdev)].inhibit) do
@@ -1131,6 +1139,7 @@ end
 -- Start plugin running.
 function startPlugin( pdev )
     L("Plugin version %2, device %1 (%3)", pdev, _PLUGIN_VERSION, luup.devices[pdev].description)
+    assert( ( luup.devices[pdev].device_num_parent or 0 ) == 0 )
 
     if luup.variable_get( MYSID, "Converted", pdev ) == "1" then
         L("This instance %1 (%2) has been converted to child; stopping.", pdev, luup.devices[pdev].description)
@@ -1478,8 +1487,6 @@ function watch( dev, sid, var, oldVal, newVal )
     D("watch(%1,%2,%3,%4,%5) luup.device(tdev)=%6", dev, sid, var, oldVal, newVal, luup.device)
     assert(var ~= nil) -- nil if service or device watch (can happen on openLuup)
     
-    D("watchData=%1", watchData) -- PHR 180610 debugging for openLuup, should not be empty table
-
     local key = string.format("%d:%s/%s", dev, sid, var)
     if watchData[key] then
         for t in pairs(watchData[key]) do
