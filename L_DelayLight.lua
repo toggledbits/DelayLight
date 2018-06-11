@@ -2,9 +2,6 @@
     L_DelayLight.lua - Core module for DelayLight
     Copyright 2017,2018 Patrick H. Rigney, All Rights Reserved.
     This file is part of DelayLight. For license information, see LICENSE at https://github.com/toggledbits/DelayLight
-
-    TO DO/CONSIDER:
-        1. Right now, sensor trip starts complete cycle, no interruption. Allow optional reset during on delay if all sensors reset.
 --]]
 --luacheck: std lua51,module,read globals luup,ignore 542 611 612 614 111/_,no max line length
 
@@ -636,7 +633,7 @@ end
 
 -- Check to see if any inhibitor device is tripped
 local function isInhibited( tdev )
-    D("isInhibited(%1)", tdev)
+    D("isInhibited(%1)", tdev) -- PHR180610
     assert( tdev ~= nil )
     D("timerState = %1", timerState)
     for _,dinfo in pairs(timerState[tostring(tdev)].inhibit) do
@@ -1200,6 +1197,7 @@ function startPlugin( pdev )
         if v.device_type == TIMERTYPE and v.device_num_parent == pdev then
             count = count + 1
             L("Starting timer %1 (%2)", k, luup.devices[k].description)
+            startTimer( k, pdev )
             local success, err = pcall( startTimer, k, pdev )
             if not success then
                 L({level=2,msg="Failed to start %1 (%2): %3"}, k, luup.devices[k].description, err)
@@ -1479,6 +1477,8 @@ end
 function watch( dev, sid, var, oldVal, newVal )
     D("watch(%1,%2,%3,%4,%5) luup.device(tdev)=%6", dev, sid, var, oldVal, newVal, luup.device)
     assert(var ~= nil) -- nil if service or device watch (can happen on openLuup)
+    
+    D("watchData=%1", watchData) -- PHR 180610 debugging for openLuup, should not be empty table
 
     local key = string.format("%d:%s/%s", dev, sid, var)
     if watchData[key] then
@@ -1494,7 +1494,6 @@ function watch( dev, sid, var, oldVal, newVal )
         end
     else
         L("Callback for unregistered key %1", key)
-        D("watch() watchData=%1", watchData)
     end
 end
 
