@@ -7,7 +7,7 @@
 
 module("L_DelayLight", package.seeall)
 
-local debugMode = true
+local debugMode = false
 
 local _PLUGIN_NAME = "DelayLight"
 local _PLUGIN_VERSION = "1.3dev"
@@ -1206,7 +1206,6 @@ function startPlugin( pdev )
         if v.device_type == TIMERTYPE and v.device_num_parent == pdev then
             count = count + 1
             L("Starting timer %1 (%2)", k, luup.devices[k].description)
-            startTimer( k, pdev )
             local success, err = pcall( startTimer, k, pdev )
             if not success then
                 L({level=2,msg="Failed to start %1 (%2): %3"}, k, luup.devices[k].description, err)
