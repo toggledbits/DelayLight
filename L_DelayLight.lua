@@ -708,8 +708,14 @@ end
 
 -- Return array of keys for a map (table). Pass array or new is created.
 local function getKeys( m, r ) 
-    if r == nil then r = {} end
     local seen = {}
+    if r == nil then r = {} 
+    else
+        -- Set up "seen" for existing in array passed in
+        for _,k in ipairs(r) do
+            seen[k] = true
+        end
+    end
     for k,_ in pairs(m) do
         if seen[k] == nil then
             table.insert( r, k )
@@ -724,15 +730,15 @@ local function checkPoll( lp, tdev )
     L("Timer %1 (%2) polling devices...", tdev, luup.devices[tdev].description)
     local now = os.time()
     local tState = timerState[tostring(tdev)]
-    local alldevs = getKeys( timerState[tostring(tdev)].trigger )
-    alldevs = getKeys( timerState[tostring(tdev)].on )
-    alldevs = getKeys( timerState[tostring(tdev)].off )
-    alldevs = getKeys( timerState[tostring(tdev)].inhibit )
+    local alldevs = getKeys( tState.trigger )
+    alldevs = getKeys( tState.on, alldevs )
+    alldevs = getKeys( tState.off, alldevs )
+    alldevs = getKeys( tState.inhibit, alldevs )
     for _,devnum in ipairs( alldevs ) do
         local ld = luup.devices[devnum]
         if ld ~= nil and luup.device_supports_service("urn:micasaverde-com:serviceId:ZWaveDevice1", devnum) and 
                 not isOnList( tState.pollList, devnum ) then
-            local pp = getVarNumeric( "PollSettings", 900, devnum, "urn:micasaverde-com:serviceId:ZWaveDevice1" )
+            local pp = getVarNumeric( "PollSettings", lp, devnum, "urn:micasaverde-com:serviceId:ZWaveDevice1" )
             if pp ~= 0  then
                 local dp = getVarNumeric( "LastPollSuccess", 0, devnum, "urn:micasaverde-com:serviceId:ZWaveNetwork1" )
                 if (now - dp) > pp then
@@ -749,6 +755,7 @@ local function checkPoll( lp, tdev )
         end
     end
     -- Poll one device per check
+    D("checkPoll() poll list now contains %1 devices", ##timerState[tostring(tdev)].pollList )
     if #timerState[tostring(tdev)].pollList > 0 then
         local devnum = table.remove( tState.pollList, 1 )
         D("checkPoll() forcing poll on overdue device %1 (%2)", devnum, luup.devices[devnum].description)
