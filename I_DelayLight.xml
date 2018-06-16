@@ -45,10 +45,10 @@
         <action>
             <serviceId>urn:toggledbits-com:serviceId:DelayLight</serviceId>
             <name>AddTimer</name>
-            <run>
+            <job>
                 DelayLight.addTimer( lul_device )
-                return true
-            </run>
+                return 4,0
+            </job>
         </action>
         <action>
             <serviceId>urn:toggledbits-com:serviceId:DelayLight</serviceId>

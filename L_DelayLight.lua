@@ -710,7 +710,7 @@ end
 local function getKeys( m, r ) 
     if r == nil then r = {} end
     local seen = {}
-    for k,_ in m do
+    for k,_ in pairs(m) do
         if seen[k] == nil then
             table.insert( r, k )
             seen[k] = true
@@ -721,7 +721,7 @@ end
 
 -- Check polling time for all devices
 local function checkPoll( lp, tdev )
-    L("Polling devices...")
+    L("Timer %1 (%2) polling devices...", tdev, luup.devices[tdev].description)
     local now = os.time()
     local tState = timerState[tostring(tdev)]
     local alldevs = getKeys( timerState[tostring(tdev)].trigger )
