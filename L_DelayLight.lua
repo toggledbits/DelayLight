@@ -7,7 +7,7 @@
 
 module("L_DelayLight", package.seeall)
 
-local debugMode = false
+local debugMode = true
 
 local _PLUGIN_NAME = "DelayLight"
 local _PLUGIN_VERSION = "1.3dev"
@@ -708,8 +708,14 @@ end
 
 -- Return array of keys for a map (table). Pass array or new is created.
 local function getKeys( m, r ) 
-    if r == nil then r = {} end
     local seen = {}
+    if r == nil then r = {} 
+    else
+        -- Set up "seen" for existing in array passed in
+        for _,k in ipairs(r) do
+            seen[k] = true
+        end
+    end
     for k,_ in pairs(m) do
         if seen[k] == nil then
             table.insert( r, k )
@@ -724,15 +730,15 @@ local function checkPoll( lp, tdev )
     L("Timer %1 (%2) polling devices...", tdev, luup.devices[tdev].description)
     local now = os.time()
     local tState = timerState[tostring(tdev)]
-    local alldevs = getKeys( timerState[tostring(tdev)].trigger )
-    alldevs = getKeys( timerState[tostring(tdev)].on )
-    alldevs = getKeys( timerState[tostring(tdev)].off )
-    alldevs = getKeys( timerState[tostring(tdev)].inhibit )
+    local alldevs = getKeys( tState.trigger )
+    alldevs = getKeys( tState.on, alldevs )
+    alldevs = getKeys( tState.off, alldevs )
+    alldevs = getKeys( tState.inhibit, alldevs )
     for _,devnum in ipairs( alldevs ) do
         local ld = luup.devices[devnum]
         if ld ~= nil and luup.device_supports_service("urn:micasaverde-com:serviceId:ZWaveDevice1", devnum) and 
                 not isOnList( tState.pollList, devnum ) then
-            local pp = getVarNumeric( "PollSettings", 900, devnum, "urn:micasaverde-com:serviceId:ZWaveDevice1" )
+            local pp = getVarNumeric( "PollSettings", lp, devnum, "urn:micasaverde-com:serviceId:ZWaveDevice1" )
             if pp ~= 0  then
                 local dp = getVarNumeric( "LastPollSuccess", 0, devnum, "urn:micasaverde-com:serviceId:ZWaveNetwork1" )
                 if (now - dp) > pp then
@@ -749,6 +755,7 @@ local function checkPoll( lp, tdev )
         end
     end
     -- Poll one device per check
+    D("checkPoll() poll list now contains %1 devices", #timerState[tostring(tdev)].pollList )
     if #timerState[tostring(tdev)].pollList > 0 then
         local devnum = table.remove( tState.pollList, 1 )
         D("checkPoll() forcing poll on overdue device %1 (%2)", devnum, luup.devices[devnum].description)
@@ -956,18 +963,18 @@ local function trigger( state, tdev )
                 -- Not an active house mode; do nothing.
                 return
             end
-            offDelay = getVarNumeric( "AutoDelay", 60, tdev )
+            offDelay = getVarNumeric( "AutoDelay", 60, tdev, TIMERSID )
             if offDelay == 0 then return end -- 0 delay means no auto-on function
-            onDelay = getVarNumeric( "OnDelay", 0, tdev )
+            onDelay = getVarNumeric( "OnDelay", 0, tdev, TIMERSID )
             if onDelay == 0 then
-                luup.variable_set( TIMERSID, "OnTime", 0, tdev )
+                luup.variable_set( TIMERSID, "OnTime", 0, tdev, TIMERSID )
             else
                 luup.variable_set( TIMERSID, "OnTime", os.time() + onDelay, tdev )
                 D("trigger() configuring on delay %1 seconds", onDelay)
             end
         else
             -- Trigger manual
-            offDelay = getVarNumeric( "ManualDelay", 3600, tdev )
+            offDelay = getVarNumeric( "ManualDelay", 3600, tdev, TIMERSID )
             if offDelay == 0 then return end -- 0 delay means no manual delay function
             luup.variable_set( TIMERSID, "OnTime", 0, tdev )
         end
@@ -989,14 +996,14 @@ local function trigger( state, tdev )
             if not isActiveHouseMode( tdev ) then
                 D("trigger() not in active house mode, not re-triggering/extending");
             end
-            delay = getVarNumeric( "AutoDelay", 60, tdev )
+            delay = getVarNumeric( "AutoDelay", 60, tdev, TIMERSID )
             if delay == 0 then return end -- 0 delay means no auto-on function
         else
-            delay = getVarNumeric( "ManualDelay", 3600, tdev )
+            delay = getVarNumeric( "ManualDelay", 3600, tdev, TIMERSID )
             if delay == 0 then return end -- 0 delay means no manual timing
         end
         local newTime = os.time() + delay
-        local offTime = getVarNumeric( "OffTime", 0, tdev )
+        local offTime = getVarNumeric( "OffTime", 0, tdev, TIMERSID )
         if newTime > offTime then
             luup.variable_set( TIMERSID, "OffTime", newTime, tdev )
         end
@@ -1006,11 +1013,11 @@ end
 local function resetTimer( tdev )
     D("resetTimer(%1)", tdev)
     addEvent{ event="resetTimer", dev=tdev }
-    scheduleTick( 0, tdev )
     luup.variable_set( TIMERSID, "Status", STATE_IDLE, tdev )
     luup.variable_set( TIMERSID, "Timing", 0, tdev )
     luup.variable_set( TIMERSID, "OffTime", 0, tdev )
     luup.variable_set( TIMERSID, "OnTime", 0, tdev )
+    -- don't do this... polling may need to happen. tick loop will stop itself if not -- scheduleTick( 0, tdev )
 end
 
 local function reset( force, tdev )
@@ -1115,7 +1122,6 @@ local function startTimer( tdev, pdev )
     if status ~= STATE_IDLE then
         L("Timer %2 (%3) Continuing %1 timing across restart...", status, tdev, luup.devices[tdev].description)
         setMessage("Recovering from reload", tdev)
-        scheduleDelay( getVarNumeric( "StartupDelay", 10, tdev, TIMERSID ), tdev )
     elseif isEnabled( tdev ) then
         -- We think we're idle/off, but check to see if we missed events during reboot/reload
         D("start() checking devices in idle startup")
@@ -1134,6 +1140,11 @@ local function startTimer( tdev, pdev )
             L("Timer %1 (%2) ready/idle", tdev, luup.devices[tdev].description)
         end
     end
+    
+    -- Always start the timer tick. The timer loop will stop itself if no timer
+    -- tasks are needed, but some things, like polling, may be needed even on
+    -- idle timers.
+    scheduleDelay( getVarNumeric( "StartupDelay", 10, tdev, TIMERSID ), tdev )
 end
 
 -- Start plugin running.
@@ -1229,12 +1240,12 @@ local function timerTick(tdev)
     D("timerTick(%1)", tdev)
     local now = os.time()
     local status = luup.variable_get( TIMERSID, "Status", tdev ) or STATE_IDLE
-    local offTime = getVarNumeric( "OffTime", 0, tdev )
-    local onTime = getVarNumeric( "OnTime", 0, tdev )
+    local offTime = getVarNumeric( "OffTime", 0, tdev, TIMERSID )
+    local onTime = getVarNumeric( "OnTime", 0, tdev, TIMERSID )
     D("timerTick(%1) Status %2 OffTime %3", tdev, status, offTime)
     local nextTick = 60
     if status ~= STATE_IDLE then
-        local holdOn = getVarNumeric( "HoldOn", 0, tdev )
+        local holdOn = getVarNumeric( "HoldOn", 0, tdev, TIMERSID )
         local sensorTripped, which = isAnyTriggerOn( true, false, tdev )
         if onTime ~= 0 then
             if onTime > now then
@@ -1290,9 +1301,10 @@ local function timerTick(tdev)
             end
         end
 
-        local lp = getVarNumeric( "ForcePoll", 0, tdev )
+        local lp = getVarNumeric( "ForcePoll", 0, tdev, TIMERSID )
         if lp > 0 then
-            if checkPoll( lp, tdev ) and ( nextTick == nil or nextTick > lp ) then
+            checkPoll( lp, tdev )
+            if nextTick == nil or nextTick > lp then
                 nextTick = lp
             end
         end
@@ -1412,8 +1424,8 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
                 trigger( STATE_AUTO, tdev )
             elseif status ~= STATE_IDLE then
                 -- Tripped trigger device is resetting in active state
-                local holdOn = getVarNumeric( "HoldOn", 0, tdev )
-                local offTime = getVarNumeric( "OffTime", 0, tdev )
+                local holdOn = getVarNumeric( "HoldOn", 0, tdev, TIMERSID )
+                local offTime = getVarNumeric( "OffTime", 0, tdev, TIMERSID )
                 D("timerWatch() trigger reset in %4, HoldOn=%1, offTime=%2, passed=%3", holdOn, offTime, offTime <= os.time(), status)
                 local left, ldev = isAnyTriggerOn( true, false, tdev )
                 if holdOn ~= 0 and not left then
