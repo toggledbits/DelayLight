@@ -1123,7 +1123,10 @@ local function startTimer( tdev, pdev )
             luup.variable_set( TIMERSID, "OnTime", 0, tdev )
             luup.variable_set( TIMERSID, "OffTime", 0, tdev )
             L("Timer %1 (%2) ready/idle", tdev, luup.devices[tdev].description)
+            setMessage( "Idle", tdev )
         end
+    else
+        setMessage( "Disabled", tdev )
     end
     
     -- Always start the timer tick. The timer loop will stop itself if no timer
