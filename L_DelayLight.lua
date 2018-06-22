@@ -7,7 +7,7 @@
 
 module("L_DelayLight", package.seeall)
 
-local debugMode = true
+local debugMode = false
 
 local _PLUGIN_NAME = "DelayLight"
 local _PLUGIN_VERSION = "1.3dev"
@@ -135,28 +135,13 @@ local function formatTime(delay)
     end
 end
 
--- Take a string and split it around sep, returning table (indexed) of substrings
--- For example abc,def,ghi becomes t[1]=abc, t[2]=def, t[3]=ghi
--- Returns: table of values, count of values (integer ge 0)
-local function split(s, sep)
-    local t = {}
-    local n = 0
-    if (s == nil or #s == 0) then return t,n end -- empty string returns nothing
-    local i,j
-    local k = 1
-    repeat
-        i, j = string.find(s, sep or "%s*,%s*", k)
-        if (i == nil) then
-            table.insert(t, string.sub(s, k, -1))
-            n = n + 1
-            break
-        else
-            table.insert(t, string.sub(s, k, i-1))
-            n = n + 1
-            k = j + 1
-        end
-    until k > string.len(s)
-    return t, n
+local function split( str, sep )
+    if sep == nil then sep = "," end
+    local arr = {}
+    if #str == 0 then return arr, 0 end
+    local rest = string.gsub( str or "", "([^" .. sep .. "]*)" .. sep, function( m ) table.insert( arr, m ) return "" end )
+    table.insert( arr, rest )
+    return arr, #arr
 end
 
 -- Create a map from an array a. Iterate over a and call function f, which must return a key and a value pair.
@@ -1138,7 +1123,10 @@ local function startTimer( tdev, pdev )
             luup.variable_set( TIMERSID, "OnTime", 0, tdev )
             luup.variable_set( TIMERSID, "OffTime", 0, tdev )
             L("Timer %1 (%2) ready/idle", tdev, luup.devices[tdev].description)
+            setMessage( "Idle", tdev )
         end
+    else
+        setMessage( "Disabled", tdev )
     end
     
     -- Always start the timer tick. The timer loop will stop itself if no timer

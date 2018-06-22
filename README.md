@@ -110,6 +110,12 @@ a "Trigger" device (below) is tripped. If 0, there is no automatic timing.
 This is the length (in seconds) of a *manual* timing cycle. A manual timing cycle is started when an "On" or "Off" device
 is turned on manually (not by the action of automatic triggering).
 
+#### Active Periods ####
+
+By default, DelayLight will operate continuously. If you would like a timer to limit automatic operation only to certain
+times of day, enter those times as active periods. The active periods are specified in 24-hour format (e.g. 20:00 is 8pm)
+in your local time. Periods that span midnight are handled (e.g. 22:00-06:00 means from 10pm to 6am the following day).
+
 #### Triggers ####
 
 The "Triggers" are the devices that will initiate (or extend) an automatic timing cycle when tripped. When used, these are
@@ -124,6 +130,11 @@ tripped state of the sensor resets.
 DelayLight timers can use another timer as a sensor (so your timers will appear on the list of trigger devices as you add more of them).
 This is useful for tandem-triggering (following) of one timer after another. One can also start a timer based on the reset of another
 (using the invert checkbox).
+
+#### Inhibitors ####
+
+Inhibitors (new in 1.3) allow you to specify sensors that prevent automatic triggering. For example, you might use the Sunrise/Sunset
+plugin as an inhibitor, to prevent automatic triggering except after sunset.
 
 #### On Devices ####
 
