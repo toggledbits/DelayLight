@@ -71,6 +71,7 @@ var DelayLightTimer = (function(api) {
     function changeTrigger( ev ) {
         var myDevice = api.getCpanelDeviceId();
         var slist = [];
+        jQuery('select.inhibit option.device').prop('disabled', false);
         jQuery('div#sensorgroup div.sensorrow').each( function( ix, obj ) {
             var devId = jQuery('select.sensor', obj).val();
             if ( "" !== devId ) {
@@ -78,6 +79,8 @@ var DelayLightTimer = (function(api) {
                     devId = "-" + devId;
                 }
                 slist.push( devId );
+                /* Disable inhibit for this device--can't be both */
+                jQuery('select.inhibit option[value="' + devId + '"]').prop('disabled', true);
             }
         });
         api.setDeviceStatePersistent( myDevice, serviceId, "Triggers", slist.join(","), 0);
@@ -87,6 +90,7 @@ var DelayLightTimer = (function(api) {
     function changeInhibit( ev ) {
         var myDevice = api.getCpanelDeviceId();
         var slist = [];
+        jQuery('select.sensor option.device').prop('disabled', false);
         jQuery('div#inhibitgroup div.inhibitrow').each( function( ix, obj ) {
             var devId = jQuery('select.inhibit', obj).val();
             if ( "" !== devId ) {
@@ -94,6 +98,8 @@ var DelayLightTimer = (function(api) {
                     devId = "-" + devId;
                 }
                 slist.push( devId );
+                /* Disable trigger for this device--can't be both */
+                jQuery('select.sensor option[value="' + devId + '"]').prop('disabled', true);
             }
         });
         api.setDeviceStatePersistent( myDevice, serviceId, "InhibitDevices", slist.join(","), 0);
@@ -125,12 +131,10 @@ var DelayLightTimer = (function(api) {
     function updateSelectedDevices() {
         var myDevice = api.getCpanelDeviceId();
         var onlist = [], offlist = [];
-        jQuery('select.onDevice').each( function( ix, obj ) {
-            var devId = jQuery(obj).val();
+        jQuery('div.onDeviceRow').each( function( ix, row ) {
+            var devId = jQuery('select', row).val();
             if ( "" !== devId ) {
-                var objId = jQuery(obj).attr("id");
-                var objIx = objId.substr(8);
-                var el = jQuery('div#ondim'+objIx+' input.dimminglevel');
+                var el = jQuery('input.dimminglevel', row);
                 var level = null;
                 if ( el.length == 1 && ! el.prop( 'disabled' ) ) {
                     level = el.removeClass("tberror").val() || "";
@@ -152,12 +156,10 @@ var DelayLightTimer = (function(api) {
                 }
             }
         });
-        jQuery('select.offDevice').each( function( ix, obj ) {
-            var devId = jQuery(obj).val();
+        jQuery('div.offDeviceRow').each( function( ix, row ) {
+            var devId = jQuery('select', row).val();
             if ( "" !== devId ) {
-                var objId = jQuery(obj).attr("id");
-                var objIx = objId.substr(9);
-                var el = jQuery('div#offdim'+objIx+' input.dimminglevel');
+                var el = jQuery('input.dimminglevel', row);
                 var level = null;
                 if ( el.length == 1 && ! el.prop( 'disabled' ) ) {
                     level = el.removeClass("tberror").val() || "";
@@ -289,18 +291,8 @@ var DelayLightTimer = (function(api) {
     }
 
     /** Update device row. Do not set configModified here, because this is used during restore at startup */
-    function updateRowForSelectedDevice( target ) {
-        var objId = jQuery(target).attr("id");
-        var objIx, base;
-        if ( objId.substr(0,3) == "onD" ) {
-            objIx = objId.substr(8);
-            base = "on";
-        } else {
-            objIx = objId.substr(9);
-            base = "off";
-        }
-        var divId = "div#" + base + "dim"+objIx;
-        var devNum = jQuery(target).val();
+    function updateRowForSelectedDevice( target ) { /* target is a DeviceRow */
+        var devNum = jQuery('select', target).val();
 
         var dimmer = false;
         if ( "" !== devNum && !isNaN( parseInt(devNum) ) ) {
@@ -308,25 +300,24 @@ var DelayLightTimer = (function(api) {
             dimmer = ( devobj !== undefined && isDimmer( devobj ) );
         }
         if ( dimmer ) {
-            jQuery(divId).show();
-            jQuery(divId+' input.dimminglevel').prop( 'disabled', false );
+            jQuery('input.dimminglevel', target).show().prop( 'disabled', false );
         } else {
-            jQuery(divId+' input.dimminglevel').prop( 'disabled', true );
-            jQuery(divId).hide();
+            jQuery('input.dimminglevel', target).hide().prop( 'disabled', true );
         }
 
-        jQuery("i#add-"+base+"device-btn").show();
-
-        if ( objIx == 1 && ( devNum === "" || devNum.substr(0,1) == "S" ) ) {
-            jQuery("i#add-"+base+"device-btn").hide();
+        jQuery("i.material-icons", target).show(); // not present on rows>1 (OK)
+        if ( devNum === "" || devNum.substr(0,1) == "S" ) {
+            jQuery("i.material-icons", target).hide();
             if ( devNum.substr(0,1) == "S" ) {
-                jQuery("div."+base+"DeviceRow:not(:first)").remove();
+                var group = target.parent();
+                jQuery('div.row:not(:first)', group).remove();
             }
         }
     }
 
     function changeSelectedDevice( ev ) {
-        updateRowForSelectedDevice( ev.currentTarget );
+        var row = jQuery( ev.currentTarget ).closest('div.row');
+        updateRowForSelectedDevice( row );
         updateSelectedDevices();
     }
 
@@ -335,39 +326,40 @@ var DelayLightTimer = (function(api) {
     }
 
     function addDevice( base ) {
-        var ix = jQuery("div."+base+"DeviceRow").length + 1;
-        var newId = base + "Device" + ix;
-        jQuery('div#'+base+'DeviceGroup').append('<div class="row '+base+'DeviceRow" id="'+base+'DeviceRow' + ix + '">' +
-            '<div class="col-xs-6 col-sm-6 col-md-4 col-lg-3 col-xl-2"><select class="'+base+'Device form-control form-control-sm" id="' + newId + '"></select></div>');
-        jQuery('select#' + newId).append(jQuery('select#'+base+'Device1 option:not(.scene)').clone()).on( "change.delaylight", changeSelectedDevice );
-        jQuery('div#'+base+'DeviceRow'+ix).append('<div class="col-xs-5 col-sm-5 col-md-3 col-lg-3 col-xl-2 dimmergroup" id="'+base+'dim'+ix+'">Dimming Level: <input class="dimminglevel" value=""></div>');
-        // Initially hide the dimming level input
-        jQuery('div#'+base+'dim'+ix+' input.dimminglevel')
-            .prop( 'disabled', true )
-            .on( "change.delaylight", changeDeviceOption );
-        jQuery('div#'+base+'dim'+ix).hide();
+        var rows = jQuery('div.' + base + 'DeviceRow');
+        var ix = rows.length + 1;
+        var container = rows.first().clone();
+        container.attr( 'id', base + 'Device' + ix );
+        jQuery('i.material-icons', container).remove(); // Remove controls
+        jQuery('select', container).val(""); // Clear selections
+        jQuery('input.dimminglevel', container).val("");
+        jQuery('input.dimminglevel', container).hide().prop( 'disabled', true );
+        jQuery('div#' + base + 'DeviceGroup').append( container );
+        jQuery('select', container).off( '.delaylight' ).on( 'change.delaylight', changeSelectedDevice );
+        jQuery('input.dimminglevel', container).off( '.delaylight' ).on( 'change.delaylight', changeDeviceOption );
         return ix;
     }
 
     function restoreDeviceSettings( base, ix, devspec ) {
+        var row = jQuery('div#' + base + 'Device' + ix);
         var t = devspec.split('=');
         var devnum = t.shift();
+
         // If the currently selected option isn't on the list, add it, so we don't lose it.
-        var el = jQuery('select#'+base+'Device'+ix+' option[value="' + devnum + '"]');
+        var el = jQuery('select option[value="' + devnum + '"]', row);
         if ( 0 === el.length ) {
-            jQuery('select#'+base+'Device'+ix).append($('<option>', { value: devnum }).text('Device #' + devnum + ' (custom config)').prop('selected', true));
+            jQuery('select', row).append($('<option>', { value: devnum }).text('Device #' + devnum + ' (custom config)').prop('selected', true));
         } else {
             el.prop('selected', true);
         }
-        updateRowForSelectedDevice( jQuery('select#'+base+'Device'+ix) );
-        var divId = "div#" + base + 'dim' + ix;
+
+        updateRowForSelectedDevice( row );
+        
         if ( !isNaN( parseInt(devnum) ) && isDimmer( deviceByNumber[devnum] ) ) {
             /* Dimmer */
-            jQuery(divId).show();
-            jQuery(divId + ' input.dimminglevel').prop( 'disabled', false ).val(t.shift() || "");
+            jQuery('input.dimminglevel', row).show().prop( 'disabled', false ).val(t.shift() || "");
         } else {
-            jQuery(divId + 'input.dimminglevel').prop( 'disabled', true );
-            jQuery(divId).hide();
+            jQuery('input.dimminglevel', row).hide().prop( 'disabled', true );
         }
     }
 
@@ -384,10 +376,10 @@ var DelayLightTimer = (function(api) {
             var devices = api.getListOfDevices();
             deviceByNumber = [];
             var rooms = [];
-            var noroom = { "id": "0", "name": "No Room", "devices": [] };
+            var noroom = { "id": 0, "name": "No Room", "devices": [] };
             rooms[noroom.id] = noroom;
             for (i=0; i<devices.length; i+=1) {
-                var roomid = devices[i].room || "0";
+                var roomid = devices[i].room || 0;
                 var roomObj = rooms[roomid];
                 if ( roomObj === undefined ) {
                     roomObj = api.cloneObject(api.getRoomObject(roomid));
@@ -418,30 +410,28 @@ var DelayLightTimer = (function(api) {
                 }
             }
 
-            html += "<style>";
+            html = "<style>";
             html += ".tb-about { margin-top: 24px; }";
             html += ".color-green { color: #00a652; }";
             html += '.tberror { border: 1px solid red; }';
             html += '.tbwarn { border: 1px solid yellow; background-color: yellow; }';
             // html += '.onDeviceRow,.offDeviceRow { min-height: 29px; }';
-            html += 'input.dimminglevel { max-width: 48px; text-align: center; }';
-            // html += 'select.onDevice,select.offDevice,select.sensor { width: 90%; min-height: 24px; }';
-            // html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
             html += 'input.tbhousemode { }';
-            html += 'div#timing input { width: 48px; }';
-            html += 'input.tbnumeric { width: 48px; text-align: center; }';
-            html += 'select#holdon { width: 90%; min-height: 24px; }';
+            html += '.cursor-hand { cursor: pointer; }';
+            html += 'input.tbnumeric { width: 60px; text-align: center; }';
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
             html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
             html += "</style>";
             html += '<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">';
+            jQuery("head").append( html );
 
             // Timing
+            html = '';
             html += '<div class="row">';
                 html += '<div class="col-xs-12 col-sm-12 col-md-6"><h3>Timing</h3>DelayLight uses two timers: <i>automatic</i>, for sensor-triggered events, and <i>manual</i> for load-triggered events.';
                     html += '<div class="row" id="timing">';
-                    html += '<div class="col-xs-12 col-sm-12 col-md-6"><label for="timer-auto">Automatic Off Delay:</label><br/><input class="tbnumeric" id="timer-auto"> secs</div>';
-                    html += '<div class="col-xs-12 col-sm-12 col-md-6"><label for="timer-auto">Manual Off Delay:</label><br/><input class="tbnumeric" id="timer-man"> secs</div>';
+                    html += '<div class="col-xs-12 col-sm-12 col-md-6"><label for="timer-auto">Automatic Off Delay (seconds):</label><br/><input class="tbnumeric form-control form-control-sm" id="timer-auto"></div>';
+                    html += '<div class="col-xs-12 col-sm-12 col-md-6"><label for="timer-auto">Manual Off Delay (seconds):</label><br/><input class="tbnumeric form-control form-control-sm" id="timer-man"></div>';
                     html += '</div>'; // #timing
                 html += '</div>';
                 html += '<div class="col-xs-12 col-sm-12 col-md-6"><h3>Active Period</h3>Active periods are the time ranges during which automatic triggering is enabled. If no periods are set (default), automatic triggering is always enabled.';
@@ -468,9 +458,9 @@ var DelayLightTimer = (function(api) {
                                     continue;
                                 }
                                 if (first)
-                                    html += "<option disabled>--" + roomObj.name + "--</option>";
+                                    html += '<option class="room" disabled>--' + roomObj.name + '--</option>';
                                 first = false;
-                                html += '<option value="' + roomObj.devices[j].id + '">' + roomObj.devices[j].friendlyName + '</option>';
+                                html += '<option class="device" value="' + roomObj.devices[j].id + '">' + roomObj.devices[j].friendlyName + '</option>';
                             }
                         }
                     });
@@ -492,9 +482,9 @@ var DelayLightTimer = (function(api) {
                                     continue;
                                 }
                                 if (first)
-                                    html += "<option disabled>--" + roomObj.name + "--</option>";
+                                    html += '<option class="room" disabled>--' + roomObj.name + '--</option>';
                                 first = false;
-                                html += '<option value="' + roomObj.devices[j].id + '">' + roomObj.devices[j].friendlyName + '</option>';
+                                html += '<option class="device" value="' + roomObj.devices[j].id + '">' + roomObj.devices[j].friendlyName + '</option>';
                             }
                         }
                     });
@@ -507,77 +497,79 @@ var DelayLightTimer = (function(api) {
             html += '</div>'; // row
 
             // "on" devices
-            html += '<div id="onDeviceGroup">';
-            html += '<div class="row"><div class="col-sm-12 col-md-6"><h3>On Devices</h3>"On" devices are turned on (together) when a trigger device starts automatic timing. Turning on an "on" device manually will start the manual timing cycle (other "on" devices are not automatically turned on). You may select any number of devices, or a single scene, and the activation of any device in the first scene group triggers manual timing. Please see the documentation for limitations on the use of scenes.</div></div>';
-            html += '<div class="row onDeviceRow">';
-            html += '<div class="col-xs-6 col-sm-6 col-md-4 col-lg-3 col-xl-2"><select class="onDevice form-control form-control-sm" id="onDevice1"><option value="">--choose--</option>';
-            r.forEach( function( roomObj ) {
-                if ( roomObj.devices && roomObj.devices.length ) {
-                    var first = true; /* per-room first */
-                    for (j=0; j<roomObj.devices.length; ++j) {
-                        var devid = roomObj.devices[j].id;
-                        if ( devid == myDevice || ! isControllable( roomObj.devices[j] ) ) {
-                            continue;
+            html += '<div class="row">';
+            html += '<div id="ondevs" class="col-xs-12 col-sm-12 col-md-6"><h3>On Devices</h3>"On" devices are turned on (together) when a trigger device starts automatic timing. Turning on an "on" device manually will start the manual timing cycle (other "on" devices are not automatically turned on). You may select any number of devices, or a single scene, and the activation of any device in the first scene group triggers manual timing. Please see the documentation for limitations on the use of scenes.';
+                html += '<div id="onDeviceGroup">';
+                    html += '<div class="row onDeviceRow" id="onDevice1">';
+                    html += '<div class="col-xs-12 col-sm-12 col-md-6"><select class="onDevice form-control form-control-sm"><option value="">--choose--</option>';
+                    r.forEach( function( roomObj ) {
+                        if ( roomObj.devices && roomObj.devices.length ) {
+                            var first = true; /* per-room first */
+                            for (j=0; j<roomObj.devices.length; ++j) {
+                                var devid = roomObj.devices[j].id;
+                                if ( devid == myDevice || ! isControllable( roomObj.devices[j] ) ) {
+                                    continue;
+                                }
+                                if (first)
+                                    html += "<option disabled>--" + roomObj.name + "--</option>";
+                                first = false;
+                                html += '<option value="' + devid + '">' + roomObj.devices[j].friendlyName + '</option>';
+                            }
+                            if ( undefined !== roomScenes[ roomObj.id ] ) {
+                                var rs = roomScenes[roomObj.id];
+                                if (rs.length > 0 && first)
+                                    html += "<option disabled>--" + roomObj.name + "--</option>";
+                                for ( j=0; j<rs.length; ++j ) {
+                                    html += '<option class="scene" value="S' + rs[j].id + '">Scene: ' + rs[j].name + '</option>';
+                                }
+                            }
                         }
-                        if (first)
-                            html += "<option disabled>--" + roomObj.name + "--</option>";
-                        first = false;
-                        html += '<option value="' + devid + '">' + roomObj.devices[j].friendlyName + '</option>';
-                    }
-                    if ( undefined !== roomScenes[ roomObj.id ] ) {
-                        var rs = roomScenes[roomObj.id];
-                        if (rs.length > 0 && first)
-                            html += "<option disabled>--" + roomObj.name + "--</option>";
-                        for ( j=0; j<rs.length; ++j ) {
-                            html += '<option class="scene" value="S' + rs[j].id + '">Scene: ' + rs[j].name + '</option>';
+                    });
+                    html += '</select></div>';
+                    html += '<div class="col-xs-6 col-sm-6 col-md-4 dimmergroup"><input class="form-control form-control-sm tbnumeric dimminglevel" placeholder="level" disabled style="display: none;"></div>';
+                    html += '<div class="col-xs-6 col-sm-6 col-md-2"><i class="material-icons w3-large color-green cursor-hand" id="add-ondevice-btn">add_circle_outline</i></div>';
+                    html += "</div>"; // onDeviceRow
+                html += '</div>'; // onDeviceGroup
+            html += '</div>'; // #ondevs
+            html += '<div id="offdevs" class="col-xs-12 col-sm-12 col-md-6"><h3>Off Devices</h3>"Off" devices will be explicitly turned off (or set to the assigned dimming level, if applicable) when the timer resets. You may select any number of devices, or a single scene.';
+                html += '<div id="offDeviceGroup">';
+                    html += '<div class="row offDeviceRow" id="offDevice1">';
+                    html += '<div class="col-xs-12 col-sm-12 col-md-6"><select class="offDevice form-control form-control-sm"><option value="">--choose--</option>';
+                    r.forEach( function( roomObj ) {
+                        if ( roomObj.devices && roomObj.devices.length ) {
+                            var first = true; /* per-room first */
+                            for (j=0; j<roomObj.devices.length; ++j) {
+                                var devid = roomObj.devices[j].id;
+                                if ( devid == myDevice || ! isControllable( roomObj.devices[j] ) ) {
+                                    continue;
+                                }
+                                if (first)
+                                    html += "<option disabled>--" + roomObj.name + "--</option>";
+                                first = false;
+                                html += '<option value="' + devid + '">' + roomObj.devices[j].friendlyName + '</option>';
+                            }
+                            if ( undefined !== roomScenes[ roomObj.id ] ) {
+                                var rs = roomScenes[roomObj.id];
+                                if (rs.length > 0 && first)
+                                    html += "<option disabled>--" + roomObj.name + "--</option>";
+                                for ( j=0; j<rs.length; ++j ) {
+                                    html += '<option class="scene" value="S' + rs[j].id + '">Scene: ' + rs[j].name + '</option>';
+                                }
+                            }
                         }
-                    }
-                }
-            });
-            html += '</select></div>';
-            html += '<div class="col-xs-5 col-sm-5 col-md-3 col-lg-3 col-xl-2 dimmergroup" id="ondim1" style="display: none;">Dimming Level: <input class="tbnumeric dimminglevel" disabled></div>';
-            html += '<div class="col-xs-1 col-sm-1"><i class="material-icons w3-large color-green cursor-hand" id="add-ondevice-btn">add_circle_outline</i></div>';
-            html += "</div>"; // onDeviceRow
-            html += '</div>'; // onDeviceGroup
-
-            // "off" devices
-            html += '<div id="offDeviceGroup">';
-            html += '<div class="row"><div class="col-xs-9 col-sm-9"><h3>Off Devices</h3>"Off" devices will be explicitly turned off (or set to the assigned dimming level, if applicable) when the timer resets. You may select any number of devices, or a single scene.</div></div>';
-            html += '<div class="row offDeviceRow">';
-            html += '<div class="col-xs-6 col-sm-6 col-md-4 col-lg-3 col-xl-2"><select class="offDevice form-control form-control-sm" id="offDevice1"><option value="">--choose--</option>';
-            r.forEach( function( roomObj ) {
-                if ( roomObj.devices && roomObj.devices.length ) {
-                    var first = true; /* per-room first */
-                    for (j=0; j<roomObj.devices.length; ++j) {
-                        var devid = roomObj.devices[j].id;
-                        if ( devid == myDevice || ! isControllable( roomObj.devices[j] ) ) {
-                            continue;
-                        }
-                        if (first)
-                            html += "<option disabled>--" + roomObj.name + "--</option>";
-                        first = false;
-                        html += '<option value="' + devid + '">' + roomObj.devices[j].friendlyName + '</option>';
-                    }
-                    if ( undefined !== roomScenes[ roomObj.id ] ) {
-                        var rs = roomScenes[roomObj.id];
-                        if (rs.length > 0 && first)
-                            html += "<option disabled>--" + roomObj.name + "--</option>";
-                        for ( j=0; j<rs.length; ++j ) {
-                            html += '<option class="scene" value="S' + rs[j].id + '">Scene: ' + rs[j].name + '</option>';
-                        }
-                    }
-                }
-            });
-            html += '</select></div>';
-            html += '<div class="col-xs-5 col-sm-5 col-md-3 col-lg-3 col-xl-2 dimmergroup" id="offdim1" style="display: none">Dimming Level: <input class="tbnumeric dimminglevel" disabled></div>';
-            html += '<div class="col-xs-1 col-sm-1"><i class="material-icons w3-large color-green cursor-hand" id="add-offdevice-btn">add_circle_outline</i></div>';
-            html += "</div>"; // offDeviceRow
-            html += '</div>'; // offDeviceGroup
+                    });
+                    html += '</select></div>';
+                    html += '<div class="col-xs-6 col-sm-6 col-md-4 dimmergroup"><input class="form-control form-control-sm tbnumeric dimminglevel" placeholder="level" disabled style="display: none;"></div>';
+                    html += '<div class="col-xs-6 col-sm-6 col-md-2"><i class="material-icons w3-large color-green cursor-hand" id="add-offdevice-btn">add_circle_outline</i></div>';
+                    html += "</div>"; // offDeviceRow
+                html += '</div>'; // offDeviceGroup
+            html += '</div>'; // #offdevs
+            html += '</div>'; // row
 
             html += '<div class="row"><div class="col-sm-12"><h3>Automatic Timing Options</h3>These options apply to automatic timing only.</div></div>';
             html += '<div class="row">';
             html += '<div class="col-sm-12 col-md-6 col-lg-3"><h4>Hold-over Mode</h4>By default, "off" devices are turned off when timer expires (mode 0).<br/><select class="tbholdon form-control form-control-sm" id="holdon"><option value="0">(0) Turn off "Off Devices" upon timer expiration</option><option value="1">(1) Do not turn off until timer expires and all triggered sensors have reset</option><option value="2">(2) Do not start off-delay timer until triggered sensors reset</option></select></div>';
-            html += '<div class="col-sm-12 col-md-6 col-lg-3"><h4>"On" Delay</h4>When a trigger device trips, wait this many seconds before turning "On Devices" on:<br/><input class="tbnumeric" id="timer-on"></div>';
+            html += '<div class="col-sm-12 col-md-6 col-lg-3"><h4>"On" Delay</h4>When a trigger device trips, wait this many seconds before turning "On Devices" on:<br/><input class="tbnumeric form-control form-control-sm" id="timer-on"></div>';
             html += '<div class="col-sm-12 col-md-6 col-lg-3 housemodes"><h4>House Modes</h4>Only trigger in the selected house modes (any if no modes are selected):<br/><input type="checkbox" class="tbhousemode" id="mode1">Home <input type="checkbox" class="tbhousemode" id="mode2">Away <input type="checkbox" class="tbhousemode" id="mode3">Night <input type="checkbox" class="tbhousemode" id="mode4">Vacation</div>';
             html += '</div>'; /* row */
 
@@ -607,15 +599,15 @@ var DelayLightTimer = (function(api) {
             });
 
             s = api.getDeviceState(myDevice, serviceId, "ActivePeriods" ) || "";
-            var xt = s.split(/,/);
-            if ( xt.length > 0 ) {
-                var r = xt.shift().match(/(\d\d)(\d\d)-(\d\d)(\d\d)/);
+            if ( "" !== s ) {
+                t = s.split(/,/);
+                var r = t.shift().match(/(\d\d)(\d\d)-(\d\d)(\d\d)/);
                 if ( r ) {
                     jQuery('div.schedrow:first select.fromtime.hour').val(r[1]);
                     jQuery('div.schedrow:first select.fromtime.minute').val(r[2]);
                     jQuery('div.schedrow:first select.totime.hour').val(r[3]);
                     jQuery('div.schedrow:first select.totime.minute').val(r[4]);
-                    xt.forEach( function ( v ) {
+                    t.forEach( function ( v ) {
                         var container = jQuery('div#schedgroup div.schedrow:first').clone();
                         jQuery('i#add-sched-btn', container).remove();
                         var r = v.match(/(\d\d)(\d\d)-(\d\d)(\d\d)/);
@@ -632,8 +624,8 @@ var DelayLightTimer = (function(api) {
 
             // Triggers
             s = api.getDeviceState(myDevice, serviceId, "Triggers") || "";
-            t = s.split(',');
-            if ( t.length > 0 ) {
+            if ( "" !== s ) {
+                t = s.split(',');
                 var devnum = t.shift();
                 var invert = false;
                 if ( devnum.substr(0,1) == "-" ) {
@@ -665,11 +657,18 @@ var DelayLightTimer = (function(api) {
                     jQuery("div#sensorgroup").append( container );
                 });
             }
+            // Disable inhibitor choice for selected trigger sensors
+            jQuery('select.sensor').each( function( ix, sel ) {
+                var devId = jQuery( sel ).val();
+                if ( "" !== devId ) {
+                    jQuery('select.inhibit option[value="' + devId + '"]').prop('disabled', true);
+                }
+            });
 
             // Inhibitors
             s = api.getDeviceState(myDevice, serviceId, "InhibitDevices") || "";
-            t = s.split(',');
-            if ( t.length > 0 ) {
+            if ( "" !== s ) {
+                t = s.split(',');
                 var devnum = t.shift();
                 var invert = false;
                 if ( devnum.substr(0,1) == "-" ) {
@@ -701,11 +700,18 @@ var DelayLightTimer = (function(api) {
                     jQuery("div#inhibitgroup").append( container );
                 });
             }
+            // Disable sensor choice for selected inhibitors
+            jQuery('select.inhibit').each( function( ix, sel ) {
+                var devId = jQuery( sel ).val();
+                if ( "" !== devId ) {
+                    jQuery('select.sensor option[value="' + devId + '"]').prop('disabled', true);
+                }
+            });
 
             // "on" devices
             s = api.getDeviceState(myDevice, serviceId, "OnList") || "";
-            t = s.split(',');
-            if ( t.length > 0 ) {
+            if ( "" !== s ) {
+                t = s.split(',');
                 var devnum = t.shift();
                 restoreDeviceSettings( "on", 1, devnum );
                 t.forEach( function( v ) {
@@ -716,8 +722,8 @@ var DelayLightTimer = (function(api) {
 
             // "off" devices
             s = api.getDeviceState(myDevice, serviceId, "OffList") || "";
-            t = s.split(',');
-            if ( t.length > 0 ) {
+            if ( "" !== s ) {
+                t = s.split(',');
                 var devnum = t.shift();
                 restoreDeviceSettings( "off", 1, devnum );
                 t.forEach( function( v ) {
@@ -742,9 +748,6 @@ var DelayLightTimer = (function(api) {
             jQuery("input.sensorinvert").off( ".delaylight" ).on( "change.delaylight", changeTrigger );
             jQuery("i#add-sensor-btn").click( function( ) {
                 var lastRow = jQuery("div.sensorrow:last");
-                var lastId = jQuery("select.sensor", lastRow).attr("id");
-                var ix = parseInt(lastId.substr(6)) + 1;
-                var newId = "sensor" + ix;
                 var container = lastRow.clone();
                 jQuery('i#add-sensor-btn', container).remove();
                 jQuery('select.sensor', container).val("");
@@ -758,9 +761,6 @@ var DelayLightTimer = (function(api) {
             jQuery("input.inhinvert").off( ".delaylight" ).on( "change.delaylight", changeInhibit );
             jQuery("i#add-inhibit-btn").click( function( ) {
                 var lastRow = jQuery("div.inhibitrow:last");
-                var lastId = jQuery("select.inhibit", lastRow).attr("id");
-                var ix = parseInt(lastId.substr(6)) + 1;
-                var newId = "inhibit" + ix;
                 var container = lastRow.clone();
                 jQuery('i#add-inhibit-btn', container).remove();
                 jQuery('select.inhibit', container).val("");
