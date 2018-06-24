@@ -2,6 +2,8 @@
 
 ## Version 1.4 (development) ##
 
+* Fix an issue with hold-over mode 2 stalling (issue #8).
+
 ## Version 1.3 (released) ##
 
 * Improvements to user interface on ALTUI;
