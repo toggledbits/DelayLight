@@ -1,6 +1,8 @@
 # Change Log #
 
-## Version 1.3 (development) ##
+## Version 1.4 (development) ##
+
+## Version 1.3 (released) ##
 
 * Improvements to user interface on ALTUI;
 * Fix icon URLs to use HTTPS (issue #6)
