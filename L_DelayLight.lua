@@ -1,21 +1,18 @@
---luacheck: std lua51,module,read globals luup,ignore 542 611 612 614 111/_,no max line length
 --[[
     L_DelayLight.lua - Core module for DelayLight
     Copyright 2017,2018 Patrick H. Rigney, All Rights Reserved.
     This file is part of DelayLight. For license information, see LICENSE at https://github.com/toggledbits/DelayLight
-
-    TO DO/CONSIDER:
-        1. Right now, sensor trip starts complete cycle, no interruption. Allow optional reset during on delay if all sensors reset.
 --]]
+--luacheck: std lua51,module,read globals luup,ignore 542 611 612 614 111/_,no max line length
 
 module("L_DelayLight", package.seeall)
 
 local debugMode = false
 
 local _PLUGIN_NAME = "DelayLight"
-local _PLUGIN_VERSION = "1.2"
-local _PLUGIN_URL = "http://www.toggledbits.com/delaylight"
-local _CONFIGVERSION = 00105
+local _PLUGIN_VERSION = "1.3"
+local _PLUGIN_URL = "https://www.toggledbits.com/delaylight"
+local _CONFIGVERSION = 00106
 
 local MYSID = "urn:toggledbits-com:serviceId:DelayLight"
 local MYTYPE = "urn:schemas-toggledbits-com:device:DelayLight:1"
@@ -32,8 +29,10 @@ local DIMMER_SID  = "urn:upnp-org:serviceId:Dimming1"
 STATE_IDLE = "idle"
 STATE_MANUAL = "man"
 STATE_AUTO = "auto"
+STATE_NONE = nil
 
 local runStamp = 0
+local pluginDevice = 0
 local timerState = {}
 local sceneData = {}
 local tickTasks = {}
@@ -104,11 +103,16 @@ end
 
 local function checkVersion(dev)
     local ui7Check = luup.variable_get(MYSID, "UI7Check", dev) or ""
-    if isOpenLuup then
-        L({level=1,msg="This plugin does not run on openLuup"})
-        return debugMode -- allow in debug mode
+    if isOpenLuup then 
+        local s = luup.variable_get( "openLuup", "Version", 2 ) -- hardcoded device?
+        local y,m,d = string.match( s or "0.0.0", "^v(%d+)%.(%d+)%.(%d+)" )
+        local y = tonumber(y) * 10000 + tonumber(m)*100 + tonumber(d)
+        D("checkVersion() checking openLuup version=%1 (numeric %2)", s, y)
+        if y < 180400 or y >= 180611 then return true end -- See Github issue #5
+        L({level=1,msg="openLuup version %1 is not supported. Please upgrade openLuup. See Github issue #5."}, y);
+        return true 
     end
-    if luup.version_branch == 1 and luup.version_major >= 7 then
+    if (luup.version_branch == 1 and luup.version_major >= 7) then
         if ui7Check == "" then
             -- One-time init for UI7 or better
             luup.variable_set(MYSID, "UI7Check", "true", dev)
@@ -131,28 +135,13 @@ local function formatTime(delay)
     end
 end
 
--- Take a string and split it around sep, returning table (indexed) of substrings
--- For example abc,def,ghi becomes t[1]=abc, t[2]=def, t[3]=ghi
--- Returns: table of values, count of values (integer ge 0)
-local function split(s, sep)
-    local t = {}
-    local n = 0
-    if (s == nil or #s == 0) then return t,n end -- empty string returns nothing
-    local i,j
-    local k = 1
-    repeat
-        i, j = string.find(s, sep or "%s*,%s*", k)
-        if (i == nil) then
-            table.insert(t, string.sub(s, k, -1))
-            n = n + 1
-            break
-        else
-            table.insert(t, string.sub(s, k, i-1))
-            n = n + 1
-            k = j + 1
-        end
-    until k > string.len(s)
-    return t, n
+local function split( str, sep )
+    if sep == nil then sep = "," end
+    local arr = {}
+    if #str == 0 then return arr, 0 end
+    local rest = string.gsub( str or "", "([^" .. sep .. "]*)" .. sep, function( m ) table.insert( arr, m ) return "" end )
+    table.insert( arr, rest )
+    return arr, #arr
 end
 
 -- Create a map from an array a. Iterate over a and call function f, which must return a key and a value pair.
@@ -193,10 +182,14 @@ end
 
 -- Create empty context for new timer device
 local function clearTimerState( tdev )
+    D("clearTimerState(%1)", tdev)
     if timerState == nil then timerState = {} end
     timerState[tostring(tdev)] = {
         pollList={},
-        triggerMap = {},
+        trigger={},
+        on={},
+        off={},
+        inhibit={},
         eventList = {}
     }
 end
@@ -225,7 +218,7 @@ local function addEvent( t )
     if p.dev == nil then L({level=2,msg="addEvent(%1) missing 'dev'"},t) end
     p.when = os.time()
     p.time = os.date("%Y%m%dT%H%M%S")
-    local dev = p.dev or luup.device
+    local dev = p.dev or pluginDevice
     table.insert( timerState[tostring(dev)].eventList, p )
     if #timerState[tostring(dev)].eventList > 25 then table.remove(timerState[tostring(dev)].eventList, 1) end
 end
@@ -332,11 +325,14 @@ end
 
 -- Interpret a trigger device spec to number and invert flag
 local function toDevnum( val )
+    D("toDevnum(%1)", val)
     local invert = false
-    local devnum = tonumber(val,10)
+    local v = string.match( val, "(%d+)=")
+    if v ~= nil then val = v end
+    local devnum = tonumber(val, 10)
     if devnum == nil then return nil end
     if devnum < 0 then devnum = -devnum invert = true end
-    if luup.devices[devnum] == nil then return end
+    if luup.devices[devnum] == nil then return nil end
     return devnum, invert
 end
 
@@ -392,10 +388,12 @@ local function watchVariable( sid, var, target, tdev )
 end
 
 -- Set up watches for triggers (if they aren't already watched)
-local function watchTriggers( tdev )
-    for nn, ix in pairs( timerState[tostring(tdev)].triggerMap ) do
+local function watchMap( m, tdev )
+    D("watchTriggers(%1,%2)", m, tdev)
+    for _,ix in pairs( m ) do
+        local nn = ix.device
         if luup.devices[nn] == nil then
-            L({level=2,msg="Device %1 not found... it may have been deleted!"}, nn)
+            L({level=2,msg="Device %1 (%2 list) not found... it may have been deleted!"}, nn, ix.list)
         elseif not (ix.watched or false) then
             if isSensorType( nn, nil, tdev ) then -- Security/binary sensor (has tripped/non-tripped)
                 D("watchTriggers(): watching %1 (%2) as sensor", nn, luup.devices[nn].description)
@@ -419,8 +417,8 @@ local function watchTriggers( tdev )
                 ix.valueOn = "1"
                 ix.watched = true
             else
-                L({level=2,msg="Device %1 (%2) doesn't seem to be a sensor or controllable load. Ignoring."}, 
-                    nn, luup.devices[nn].description)
+                L({level=2,msg="Device %3 %1 (%2) doesn't seem to be a sensor or controllable load. Ignoring."},
+                    nn, luup.devices[nn].description, ix.list)
             end
         else
             D("watchTriggers() device %1 (%2) already on watch", nn, luup.devices[nn])
@@ -428,9 +426,16 @@ local function watchTriggers( tdev )
     end
 end
 
+local function watchTriggers( tdev ) 
+    watchMap( timerState[tostring(tdev)].trigger, tdev )
+    watchMap( timerState[tostring(tdev)].on, tdev )
+    watchMap( timerState[tostring(tdev)].off, tdev )
+    -- We don't watch inhibits, we just look at them as needed
+end
+
 -- Load a scene into the trigger map.
-local function loadTriggerMapFromScene( scene, list, tdev )
-    D("loadTriggerMapFromScene(%1,%2,%3)", scene, list, tdev)
+local function loadTriggerMapFromScene( scene, m, list, tdev )
+    D("loadTriggerMapFromScene(%1,%2,%3,%4)", scene, m, list, tdev)
     local scd = getSceneData( scene, tdev )
     if scd == nil then return end -- can't load (retry later)
 
@@ -446,7 +451,7 @@ local function loadTriggerMapFromScene( scene, list, tdev )
             L({level=2,msg="Device %1 used in scene %2 (%3) not found in luup.devices. Maybe it got deleted? Skipping."}, deviceNum, scd.id, scd.description)
         elseif isSwitchType( deviceNum, nil, tdev ) or luup.devices[deviceNum].device_type == MYTYPE then
             -- Something we can handle natively.
-            timerState[tostring(tdev)].triggerMap[deviceNum] = { trigger=STATE_MANUAL, invert=false, ['type']="load", list=list }
+            m[deviceNum] = { device=deviceNum, invert=false, list=list }
         else
             -- Not a configured/able device, so we can't watch it.
             local ld = luup.devices[deviceNum]
@@ -476,17 +481,15 @@ local function deviceOnOff( targetDevice, state, vtDev )
         if rc ~= 0 then L({level=2,msg="Scene run failed, result %1, %2"}, rc, rs ) end
     else
         -- Controlled load (hopefully).
-        local dimmer = false
-        local targetId, l, i, lvl
-        i, _, targetId,l = targetDevice:find("(%w+)=(%d+)")
+        local targetId, lvl, i
+        i, _, targetId, lvl = targetDevice:find("(%w+)=(%d+)")
         if i == nil then
-            targetId = tonumber(targetDevice,10)
-            lvl = iif( state, 100, 0 )
+            targetId = tonumber(targetDevice, 10)
+            lvl = nil
         else
-            D("deviceOnOff() handling dimming spec device=%1, level=%2", targetId, l)
-            targetId = tonumber(targetId,10)
-            lvl = tonumber(l,10)
-            dimmer = true
+            targetId = tonumber(targetId, 10)
+            lvl = tonumber(lvl, 10)
+            D("deviceOnOff() handling dimming spec %3 as device=%1, level=%2", targetId, lvl, targetDevice)
         end
         if targetId ~= nil and luup.devices[targetId] ~= nil then
             local desc = luup.devices[targetId].description
@@ -494,17 +497,21 @@ local function deviceOnOff( targetDevice, state, vtDev )
             local oldState = tonumber(luup.variable_get( SWITCH_SID, "Status", targetId ) or "0", 10)
             local targetVal = iif( state, 1, 0 )
             if luup.devices[targetId].device_type == "urn:schemas-upnp-org:device:VSwitch:1" then
-                -- VirtualSwitch plugin requires newTargetValue parameter as string, which isn't strict UPnP, so handle separately.
+                -- VirtualSwitch plugin requires newTargetValue parameter as string, which isn't
+                -- strict UPnP, so handle separately.
                 D("deviceOnOff() handling %1 (%2) as VSwitch1 exception, setting target=%3", targetId, desc, state)
-                local rc, rs = luup.call_action("urn:upnp-org:serviceId:VSwitch1", "SetTarget", { newTargetValue=tostring(targetVal) }, targetId)
+                local rc, rs = luup.call_action("urn:upnp-org:serviceId:VSwitch1", "SetTarget",
+                    { newTargetValue=tostring(targetVal) }, targetId)
                 D("deviceOnOff() action SetTarget for device %1 returned %2 %3", targetId, rc, rs)
-            elseif dimmer and luup.device_supports_service(DIMMER_SID, targetId) then
+            elseif lvl ~= nil and luup.device_supports_service(DIMMER_SID, targetId) then
                 D("deviceOnOff() handling %1 (%2) as Dimming1, setting target level=%3", targetId, desc, lvl)
-                local rc, rs = luup.call_action(DIMMER_SID, "SetLoadLevelTarget", { newLoadlevelTarget=lvl }, targetId) -- note case inconsistency in argument name
+                local rc, rs = luup.call_action(DIMMER_SID, "SetLoadLevelTarget",
+                    { newLoadlevelTarget=lvl }, targetId) -- note case inconsistency in argument name
                 D("deviceOnOff() action SetLoadLevelTarget for device %1 returned %2 %3", targetId, rc, rs)
             elseif luup.device_supports_service( SWITCH_SID , targetId ) then
                 D("deviceOnOff() handling %1 (%2) as SwitchPower1, setting target=%3", targetId, desc, state)
-                local rc, rs = luup.call_action("urn:upnp-org:serviceId:SwitchPower1", "SetTarget", { newTargetValue=targetVal }, targetId)
+                local rc, rs = luup.call_action("urn:upnp-org:serviceId:SwitchPower1", "SetTarget",
+                    { newTargetValue=targetVal }, targetId)
                 D("deviceOnOff() action SetTarget for device %1 returned %2 %3", targetId, rc, rs)
             elseif luup.devices[targetId].device_type == MYTYPE then
                 -- Yes, we can control another delay light!
@@ -551,13 +558,13 @@ end
 
 -- Figure out if a device is on, our way.
 local function isDeviceOn( devnum, dinfo, newVal, tdev )
+    D("isDeviceOn(%1,%2,%3,%4)", devnum, dinfo, newVal, tdev)
     assert(type(devnum)=="number")
-    dinfo = dinfo or timerState[tostring(tdev)].triggerMap[devnum]
     assert(dinfo ~= nil)
     assert(type(tdev)=="number")
     if newVal == nil then newVal = luup.variable_get( dinfo.service, dinfo.variable, devnum ) end
 
-    -- dinfo, which contains the triggerMap data for this device, as enough information that we can use
+    -- dinfo, which contains the trigger map data for this device, as enough information that we can use
     -- it exclusively to see what our device state is.
     local testValues = dinfo.valueOn or "1"
     if type(testValues) ~= "table" then testValues = { testValues } end
@@ -574,34 +581,68 @@ local function isDeviceOn( devnum, dinfo, newVal, tdev )
     return false
 end
 
+-- Given a device map, return true if any device is "on"
+local function isMapDeviceOn( m, tdev )
+    D("isMapDeviceOn(%1,%2)", m, tdev )
+    for _,dinfo in pairs(m) do
+        local devnum = dinfo.device
+        if luup.devices[devnum] ~= nil and luup.is_ready(devnum) then
+--[[
+            local pp = getVarNumeric( "PollSettings", 60, devnum, "urn:micasaverde-com:serviceId:ZWaveDevice1" )
+            if pp ~= 0  then
+                local dp = getVarNumeric( "LastPollSuccess", 0, devnum, "urn:micasaverde-com:serviceId:ZWaveNetwork1" )
+                if (os.time()-dp) > (2*pp) then
+                    L({level=2,prefix=_PLUGIN_NAME.."(PP): ",msg="device %1 (%2) overdue for poll; interval %3, last successful %4 ago"}, devnum, luup.devices[devnum].description, pp, os.time()-dp)
+                end
+            end
+--]]
+            local isOn = isDeviceOn( devnum, dinfo, nil, tdev )
+            if isOn ~= nil and isOn then
+                return true, devnum -- nothing more to do
+            end
+        else
+            L("Device %1 (%2 list) not found in luup.devices or not ready, skipping.", devnum, dinfo.list)
+        end
+    end
+    return false
+end
+
 -- Return true if any device in a selected list is on (loads, sensors)
 local function isAnyTriggerOn( includeSensors, includeLoads, tdev )
     assert( type(includeSensors) == "boolean" )
     assert( type(includeLoads) == "boolean" )
     assert( tdev ~= nil )
-    for devnum,dinfo in pairs(timerState[tostring(tdev)].triggerMap) do
-        if luup.devices[devnum] ~= nil and luup.is_ready(devnum) then
-            local doCheck = ( includeSensors and dinfo.type == "trigger" ) or ( includeLoads and dinfo.type == "load" )
-            if doCheck then
---[[
-                local pp = getVarNumeric( "PollSettings", 60, devnum, "urn:micasaverde-com:serviceId:ZWaveDevice1" )
-                if pp ~= 0  then
-                    local dp = getVarNumeric( "LastPollSuccess", 0, devnum, "urn:micasaverde-com:serviceId:ZWaveNetwork1" )
-                    if (os.time()-dp) > (2*pp) then
-                        L({level=2,prefix=_PLUGIN_NAME.."(PP): ",msg="device %1 (%2) overdue for poll; interval %3, last successful %4 ago"}, devnum, luup.devices[devnum].description, pp, os.time()-dp)
-                    end
-                end
---]]
-                local isOn = isDeviceOn( devnum, dinfo, nil, tdev )
-                if isOn ~= nil and isOn then
-                    return true, devnum -- nothing more to do
-                end
-            end
-        else
-            L("Trigger device %1 not found in luup.devices or not ready, skipping.", devnum)
-        end
+    if includeSensors and isMapDeviceOn( timerState[tostring(tdev)].trigger, tdev ) then
+        return true
+    end
+    if includeLoads and isMapDeviceOn( timerState[tostring(tdev)].on, tdev ) then
+        return true
+    end
+    if includeLoads and isMapDeviceOn( timerState[tostring(tdev)].off, tdev ) then
+        return true
     end
     return false
+end
+
+-- Check to see if any inhibitor device is tripped
+local function isInhibited( tdev )
+    D("isInhibited(%1)", tdev) 
+    assert( tdev ~= nil )
+    D("timerState = %1", timerState)
+    for _,dinfo in pairs(timerState[tostring(tdev)].inhibit) do
+        local devnum = dinfo.device
+        if luup.devices[devnum] ~= nil and luup.is_ready(devnum) then
+            if isDeviceOn( devnum, dinfo, nil, tdev ) then
+                D("isInhibited() device %1 (%2) is ON, inhibiting trigger", devnum, 
+                    luup.devices[devnum].description)
+                return true, dinfo
+            end
+        else
+            D("isInhibited() device %1 (%2) does not exist or is not ready; ignoring.",
+                devnum, luup.devices[devnum])
+        end
+    end
+    return false -- None tripped/on
 end
 
 -- Return whether item is on list (table as array)
@@ -611,6 +652,29 @@ local function isOnList( l, e )
         if v == e then return true, n end
     end
     return false
+end
+
+-- Active time period?
+local function isActivePeriod( tdev )
+    local tList = split( luup.variable_get( TIMERSID, "ActivePeriods", tdev ) or "" )
+    if #tList > 0 then
+        local now = os.date( "*t" )
+        now = now.hour * 60 + now.min
+        for _,ix in pairs(tList) do
+            local hs,ms,he,me = string.match( ix, "^(%d%d)(%d%d)-(%d%d)(%d%d)" ) -- HHMM-HHMM
+            if hs ~= nil then
+                hs = tonumber(hs)*60 + tonumber(ms)
+                he = tonumber(he)*60 + tonumber(me)
+                if he < hs and (now >= hs or now < he) then -- wraps midnight
+                    return true
+                elseif now >= hs and now < he then 
+                    return true
+                end
+            end
+        end
+        return false -- none of the time periods matched
+    end
+    return true -- empty list means always active
 end
 
 -- Active house mode?
@@ -627,36 +691,63 @@ local function isActiveHouseMode( tdev )
     return false
 end
 
+-- Return array of keys for a map (table). Pass array or new is created.
+local function getKeys( m, r ) 
+    local seen = {}
+    if r == nil then r = {} 
+    else
+        -- Set up "seen" for existing in array passed in
+        for _,k in ipairs(r) do
+            seen[k] = true
+        end
+    end
+    for k,_ in pairs(m) do
+        if seen[k] == nil then
+            table.insert( r, k )
+            seen[k] = true
+        end
+    end
+    return r
+end
+
 -- Check polling time for all devices
 local function checkPoll( lp, tdev )
-    L("Polling devices...")
+    L("Timer %1 (%2) polling devices...", tdev, luup.devices[tdev].description)
     local now = os.time()
-    for devnum in pairs(timerState[tostring(tdev)].triggerMap) do
-        if luup.devices[devnum] ~= nil and luup.device_supports_service("urn:micasaverde-com:serviceId:ZWaveDevice1", devnum) and not isOnList( timerState[tostring(tdev)].pollList, devnum ) then
-            local pp = getVarNumeric( "PollSettings", 900, devnum, "urn:micasaverde-com:serviceId:ZWaveDevice1" )
+    local tState = timerState[tostring(tdev)]
+    local alldevs = getKeys( tState.trigger )
+    alldevs = getKeys( tState.on, alldevs )
+    alldevs = getKeys( tState.off, alldevs )
+    alldevs = getKeys( tState.inhibit, alldevs )
+    for _,devnum in ipairs( alldevs ) do
+        local ld = luup.devices[devnum]
+        if ld ~= nil and luup.device_supports_service("urn:micasaverde-com:serviceId:ZWaveDevice1", devnum) and 
+                not isOnList( tState.pollList, devnum ) then
+            local pp = getVarNumeric( "PollSettings", lp, devnum, "urn:micasaverde-com:serviceId:ZWaveDevice1" )
             if pp ~= 0  then
                 local dp = getVarNumeric( "LastPollSuccess", 0, devnum, "urn:micasaverde-com:serviceId:ZWaveNetwork1" )
-                if (now - dp) >= pp then
+                if (now - dp) > pp then
                     if luup.variable_get( "urn:micasaverde-com:serviceId:ZWaveDevice1", "WakeupInterval", devnum ) ~= nil then
-                        D("checkPoll() skipping forced poll on battery-operated device %1 (%2)", devnum, luup.devices[devnum].description)
+                        D("checkPoll() skipping forced poll on battery-operated device %1 (%2)", devnum, ld.description)
                     else
-                        D("checkPoll() queueing poll on device %1 (%2), last %3 (%4 ago)", devnum, luup.devices[devnum].description, dp, now-dp)
-                        table.insert(timerState[tostring(tdev)].pollList, devnum)
+                        D("checkPoll() queueing poll on device %1 (%2), last %3 (%4 ago)", devnum, ld.description, dp, now-dp)
+                        table.insert(tState.pollList, devnum)
                     end
                 end
             end
         else
-            D("checkPoll() skipping %1 (%2), not a ZWaveDevice", devnum, luup.devices[devnum].description)
+            D("checkPoll() skipping %1 (%2), not a ZWaveDevice", devnum, ld.description)
         end
     end
     -- Poll one device per check
+    D("checkPoll() poll list now contains %1 devices", #timerState[tostring(tdev)].pollList )
     if #timerState[tostring(tdev)].pollList > 0 then
-        local devnum = table.remove(timerState[tostring(tdev)].pollList, 1)
+        local devnum = table.remove( tState.pollList, 1 )
         D("checkPoll() forcing poll on overdue device %1 (%2)", devnum, luup.devices[devnum].description)
         luup.call_action( "urn:micasaverde-com:serviceId:HaDevice1", "Poll", {}, devnum)
         luup.variable_set( TIMERSID, "LastPoll", now, tdev )
     end
-    return #timerState[tostring(tdev)].pollList > 0 -- true if there are still items on pollList
+    return #tState.pollList > 0 -- true if there are still items on pollList
 end
 
 -- Return the plugin version string
@@ -706,13 +797,19 @@ local function timer_runOnce( tdev )
             luup.variable_set( TIMERSID, "ForcePoll", 0, tdev )
             luup.variable_set( TIMERSID, "LastTrigger", "", tdev )
             luup.variable_set( TIMERSID, "HouseModes", "", tdev )
+            luup.variable_set( TIMERSID, "InhibitDevices", "", tdev )
+            luup.variable_set( TIMERSID, "ActivePeriods", "", tdev )
         end
         luup.variable_set( TIMERSID, "Version", _CONFIGVERSION, tdev )
         return
     end
 
     -- Consider per-version changes.
-    -- None at the moment.
+    if s < 00106 then
+        L("Upgrading timer %1 (%2) to 00106", tdev, luup.devices[tdev].description)
+        luup.variable_set( TIMERSID, "InhibitDevices", "", tdev )
+        luup.variable_set( TIMERSID, "ActivePeriods", "", tdev )
+    end
 
     -- Update version last.
     if (s ~= _CONFIGVERSION) then
@@ -738,25 +835,25 @@ local function plugin_runOnce( pdev )
     end
 
     -- Consider per-version changes.
-    if s < 00103 then 
+    if s < 00103 then
         L("Upgrading plugin %1 to 00103...", pdev)
         -- Conversion to 00103. Find all DLs incl this one and create a child
-        -- of this one for it. Link it via the OldDevice state variable, which 
+        -- of this one for it. Link it via the OldDevice state variable, which
         -- we'll detect separately.
         local ptr = luup.chdev.start( pdev )
         local count = 0
         for k,v in pairs(luup.devices) do
             if v.device_type == MYTYPE then
                 luup.variable_set(MYSID, "Version", 00103, k) -- do now, so no repeat
-                if k ~= pdev then 
+                if k ~= pdev then
                     luup.variable_set(MYSID, "Converted", 1, k)
                     luup.attr_set( "name", "X"..v.description, k )
                 else
                     luup.attr_set( "name", "DelayLight Plugin", k )
                 end
                 D("plugin_runOnce() creating child for %1 (%2)", k, luup.devices[k].description)
-                luup.chdev.append( pdev, ptr, "t"..k, v.description, TIMERTYPE, 
-                    "D_DelayLightTimer.xml", "", 
+                luup.chdev.append( pdev, ptr, "t"..k, v.description, TIMERTYPE,
+                    "D_DelayLightTimer.xml", "",
                     string.format("%s,%s=%d", TIMERSID, "OldDevice", k), false )
                 count = count + 1
             end
@@ -766,13 +863,19 @@ local function plugin_runOnce( pdev )
         L("RELOADING LUUP!")
         luup.reload()
     end
-    
-    if s < 00105 then 
+
+    if s < 00105 then
         L("Upgrading plugin %1 configuration to 00105...", pdev)
         luup.variable_set(MYSID, "NumChildren", 0, pdev)
         luup.variable_set(MYSID, "NumRunning", 0, pdev)
         luup.variable_set(MYSID, "Message", "", pdev)
-    end    
+    end
+    
+    if s < 00106 then
+        L("Upgrading plugin %1 configuration to 00106...", pdev)
+        -- Nothing
+    end
+    
     -- Update version last.
     if (s ~= _CONFIGVERSION) then
         luup.variable_set(MYSID, "Version", _CONFIGVERSION, pdev)
@@ -785,7 +888,7 @@ function addTimer( pdev )
     local ptr = luup.chdev.start( pdev )
     for _,v in pairs(luup.devices) do
         if v.device_type == TIMERTYPE and v.device_num_parent == pdev then
-            luup.chdev.append( pdev, ptr, v.id, v.description, "", 
+            luup.chdev.append( pdev, ptr, v.id, v.description, "",
                 "D_DelayLightTimer.xml", "", "", false )
         end
     end
@@ -808,10 +911,29 @@ end
 
 local function trigger( state, tdev )
     D("trigger(%1,%2)", state, tdev)
+    assert(type(tdev)=="number")
     assert(luup.devices[tdev] and luup.devices[tdev].device_type == TIMERTYPE)
 
     -- If we're disabled, this function has no effect.
-    if not isEnabled( tdev ) then return end
+    if not isEnabled( tdev ) then 
+        D("trigger() disabled, no triggering.")
+        setMessage("Disabled", tdev)
+        return 
+    end
+    
+    -- If we're not in active period, no effect.
+    if not isActivePeriod( tdev ) then
+        D("trigger() inactive period, not triggering.")
+        setMessage("Inactive period", tdev)
+        return
+    end
+    
+    -- If inhibited by device, no effect.
+    if isInhibited( tdev ) then 
+        D("trigger() inhibited, not triggering.")
+        setMessage("Inhibited", tdev)
+        return 
+    end
 
     addEvent{ event="trigger", dev=tdev, state=state }
 
@@ -826,25 +948,26 @@ local function trigger( state, tdev )
                 -- Not an active house mode; do nothing.
                 return
             end
-            offDelay = getVarNumeric( "AutoDelay", 60, tdev )
+            offDelay = getVarNumeric( "AutoDelay", 60, tdev, TIMERSID )
             if offDelay == 0 then return end -- 0 delay means no auto-on function
-            onDelay = getVarNumeric( "OnDelay", 0, tdev )
+            onDelay = getVarNumeric( "OnDelay", 0, tdev, TIMERSID )
             if onDelay == 0 then
-                luup.variable_set( TIMERSID, "OnTime", 0, tdev )
+                luup.variable_set( TIMERSID, "OnTime", 0, tdev, TIMERSID )
             else
                 luup.variable_set( TIMERSID, "OnTime", os.time() + onDelay, tdev )
                 D("trigger() configuring on delay %1 seconds", onDelay)
             end
         else
             -- Trigger manual
-            offDelay = getVarNumeric( "ManualDelay", 3600, tdev )
+            offDelay = getVarNumeric( "ManualDelay", 3600, tdev, TIMERSID )
+            if offDelay == 0 then return end -- 0 delay means no manual delay function
             luup.variable_set( TIMERSID, "OnTime", 0, tdev )
         end
         luup.variable_set( TIMERSID, "Status", state, tdev )
         luup.variable_set( TIMERSID, "Timing", 1, tdev )
         luup.variable_set( TIMERSID, "OffTime", os.time() + onDelay + offDelay, tdev )
         scheduleDelay( scaleNextTick( onDelay + offDelay ), tdev )
-        
+
         -- Finally, if there's no onDelay, turn loads on. Do this last, so status
         -- is properly set so when watches start coming for devices, the watch knows
         -- it's a reaction to auto mode, not a manual start.
@@ -858,14 +981,14 @@ local function trigger( state, tdev )
             if not isActiveHouseMode( tdev ) then
                 D("trigger() not in active house mode, not re-triggering/extending");
             end
-            delay = getVarNumeric( "AutoDelay", 60, tdev )
+            delay = getVarNumeric( "AutoDelay", 60, tdev, TIMERSID )
             if delay == 0 then return end -- 0 delay means no auto-on function
         else
-            delay = getVarNumeric( "ManualDelay", 3600, tdev )
+            delay = getVarNumeric( "ManualDelay", 3600, tdev, TIMERSID )
             if delay == 0 then return end -- 0 delay means no manual timing
         end
         local newTime = os.time() + delay
-        local offTime = getVarNumeric( "OffTime", 0, tdev )
+        local offTime = getVarNumeric( "OffTime", 0, tdev, TIMERSID )
         if newTime > offTime then
             luup.variable_set( TIMERSID, "OffTime", newTime, tdev )
         end
@@ -875,11 +998,11 @@ end
 local function resetTimer( tdev )
     D("resetTimer(%1)", tdev)
     addEvent{ event="resetTimer", dev=tdev }
-    scheduleTick( 0, tdev )
     luup.variable_set( TIMERSID, "Status", STATE_IDLE, tdev )
     luup.variable_set( TIMERSID, "Timing", 0, tdev )
     luup.variable_set( TIMERSID, "OffTime", 0, tdev )
     luup.variable_set( TIMERSID, "OnTime", 0, tdev )
+    -- don't do this... polling may need to happen. tick loop will stop itself if not -- scheduleTick( 0, tdev )
 end
 
 local function reset( force, tdev )
@@ -945,20 +1068,34 @@ local function startTimer( tdev, pdev )
 
     -- Set up our lists of Triggers and Onlist devices.
     local triggers = split( luup.variable_get( TIMERSID, "Triggers", tdev ) or "" )
-    timerState[tostring(tdev)].triggerMap = map( triggers, function( ix, v ) local dev,inv dev,inv = toDevnum(v) return dev, { trigger=STATE_AUTO, invert=inv, ['type']="trigger", list="triggers" } end, nil )
+    timerState[tostring(tdev)].trigger = map( triggers, 
+        function( ix, v ) local dev,inv = toDevnum(v) return dev, { device=dev, invert=inv, list="trigger" } end )
+    
+    -- "On" list
     local l = split( luup.variable_get( TIMERSID, "OnList", tdev ) or "" )
     if #l > 0 and l[1]:sub(1,1) == "S" then
-        loadTriggerMapFromScene( tonumber(l[1]:sub(2)), "on", tdev )
+        loadTriggerMapFromScene( tonumber(l[1]:sub(2)), timerState[tostring(tdev)].on, "on", tdev )
     else
-        timerState[tostring(tdev)].triggerMap = map( l, function( ix, v ) local dev = toDevnum(v) return dev, { trigger=STATE_MANUAL, invert=false, ['type']="load", list="on" } end, timerState[tostring(tdev)].triggerMap, false )
+        timerState[tostring(tdev)].on = map( l, 
+            function( ix, v ) local dev = toDevnum(v) return dev, { device=dev, invert=false, list="on" } end )
     end
+    
+    -- "Off" list
     l = split( luup.variable_get( TIMERSID, "OffList", tdev ) or "" )
     if #l > 0 and l[1]:sub(1,1) == "S" then
-        loadTriggerMapFromScene( tonumber(l[1]:sub(2)), "off", tdev )
+        loadTriggerMapFromScene( tonumber(l[1]:sub(2)), timerState[tostring(tdev)].off, "off", tdev )
     else
-        timerState[tostring(tdev)].triggerMap = map( l, function( ix, v ) local dev = toDevnum(v) return dev, { trigger=STATE_MANUAL, invert=false, ['type']="load", list="off" } end, timerState[tostring(tdev)].triggerMap, false )
+        timerState[tostring(tdev)].off = map( l, 
+            function( ix, v ) local dev = toDevnum(v) return dev, { device=dev, invert=false, list="off" } end )
     end
+    
+    -- Inhibits
+    l = split( luup.variable_get( TIMERSID, "InhibitDevices", tdev ) or "" )
+    timerState[tostring(tdev)].inhibit = map( l, 
+        function( ix, v ) local dev,inv = toDevnum(v) return dev, { device=dev, invert=inv, list="inhibit" } end )
 
+    D("startTimer() init of timerState = %1", timerState[tostring(tdev)])
+    
     -- Watch 'em.
     watchTriggers( tdev )
 
@@ -970,7 +1107,6 @@ local function startTimer( tdev, pdev )
     if status ~= STATE_IDLE then
         L("Timer %2 (%3) Continuing %1 timing across restart...", status, tdev, luup.devices[tdev].description)
         setMessage("Recovering from reload", tdev)
-        scheduleDelay( getVarNumeric( "StartupDelay", 10, tdev, TIMERSID ), tdev )
     elseif isEnabled( tdev ) then
         -- We think we're idle/off, but check to see if we missed events during reboot/reload
         D("start() checking devices in idle startup")
@@ -987,14 +1123,23 @@ local function startTimer( tdev, pdev )
             luup.variable_set( TIMERSID, "OnTime", 0, tdev )
             luup.variable_set( TIMERSID, "OffTime", 0, tdev )
             L("Timer %1 (%2) ready/idle", tdev, luup.devices[tdev].description)
+            setMessage( "Idle", tdev )
         end
+    else
+        setMessage( "Disabled", tdev )
     end
+    
+    -- Always start the timer tick. The timer loop will stop itself if no timer
+    -- tasks are needed, but some things, like polling, may be needed even on
+    -- idle timers.
+    scheduleDelay( getVarNumeric( "StartupDelay", 10, tdev, TIMERSID ), tdev )
 end
 
 -- Start plugin running.
 function startPlugin( pdev )
     L("Plugin version %2, device %1 (%3)", pdev, _PLUGIN_VERSION, luup.devices[pdev].description)
-    
+    assert( ( luup.devices[pdev].device_num_parent or 0 ) == 0 )
+
     if luup.variable_get( MYSID, "Converted", pdev ) == "1" then
         L("This instance %1 (%2) has been converted to child; stopping.", pdev, luup.devices[pdev].description)
         luup.variable_set( MYSID, "Message", "Device upgraded. Delete this one!", pdev)
@@ -1004,6 +1149,7 @@ function startPlugin( pdev )
     end
 
     -- Early inits
+    pluginDevice = pdev
     isALTUI = false
     isOpenLuup = false
     timerState = {}
@@ -1022,7 +1168,15 @@ function startPlugin( pdev )
                     -- newControlPanelFunc="DelayLightTimer_ALTUI.controlPanelDraw",
                     newStyleFunc="DelayLightTimer_ALTUI.getStyle"
                 }, k )
-            D("startTimer() ALTUI's RegisterPlugin action returned resultCode=%1, resultString=%2, job=%3, returnArguments=%4", rc,rs,jj,ra)
+            D("startTimer() ALTUI's RegisterPlugin action for %5 returned resultCode=%1, resultString=%2, job=%3, returnArguments=%4", rc,rs,jj,ra, TIMERTYPE)
+            rc,rs,jj,ra = luup.call_action("urn:upnp-org:serviceId:altui1", "RegisterPlugin",
+                {
+                    newDeviceType=MYTYPE,
+                    newScriptFile="J_DelayLight_ALTUI.js",
+                    newDeviceDrawFunc="DelayLight_ALTUI.deviceDraw",
+                    newStyleFunc="DelayLight_ALTUI.getStyle"
+                }, k )
+            D("startTimer() ALTUI's RegisterPlugin action for %5 returned resultCode=%1, resultString=%2, job=%3, returnArguments=%4", rc,rs,jj,ra, MYTYPE)
         elseif v.device_type == "openLuup" then
             D("start() detected openLuup")
             isOpenLuup = true
@@ -1052,7 +1206,7 @@ function startPlugin( pdev )
             count = count + 1
             L("Starting timer %1 (%2)", k, luup.devices[k].description)
             local success, err = pcall( startTimer, k, pdev )
-            if not success then 
+            if not success then
                 L({level=2,msg="Failed to start %1 (%2): %3"}, k, luup.devices[k].description, err)
             else
                 started = started + 1
@@ -1064,21 +1218,23 @@ function startPlugin( pdev )
     else
         luup.variable_set( MYSID, "Message", string.format("Started %d/%d at %s", started, count, os.date("%x %X")), pdev )
     end
-    
+
     -- Return success
     luup.set_failure( 0, pdev )
     return true, "Ready", _PLUGIN_NAME
 end
 
-local function timerTick(tdev)            
+local function timerTick(tdev)
     D("timerTick(%1)", tdev)
     local now = os.time()
     local status = luup.variable_get( TIMERSID, "Status", tdev ) or STATE_IDLE
-    local offTime = getVarNumeric( "OffTime", 0, tdev )
-    local onTime = getVarNumeric( "OnTime", 0, tdev )
+    local offTime = getVarNumeric( "OffTime", 0, tdev, TIMERSID )
+    local onTime = getVarNumeric( "OnTime", 0, tdev, TIMERSID )
     D("timerTick(%1) Status %2 OffTime %3", tdev, status, offTime)
     local nextTick = 60
     if status ~= STATE_IDLE then
+        local holdOn = getVarNumeric( "HoldOn", 0, tdev, TIMERSID )
+        local sensorTripped, which = isAnyTriggerOn( true, false, tdev )
         if onTime ~= 0 then
             if onTime > now then
                 local delay = onTime - now
@@ -1093,28 +1249,25 @@ local function timerTick(tdev)
                 setMessage( "Delay Off " .. formatTime(delay), tdev )
                 nextTick = scaleNextTick(delay)
             end
+        elseif holdOn == 2 and sensorTripped then
+            D("timerTick() hold-on mode 2 and sensor %1 (%2) still tripped", which, luup.devices[which].description)
+            setMessage( "Holding for " .. luup.devices[which].description, tdev )
+            nextTick = 2
         elseif offTime > now then
             -- Not our time yet...
             local delay = offTime - now
             D("timerTick() offTime %1, still %2 to go...", offTime, delay)
             setMessage( "Delay Off " .. formatTime(delay), tdev )
             nextTick = scaleNextTick(delay)
+        elseif holdOn == 1 and sensorTripped then
+            D("timerTick() hold-on mode 1 and sensor %1 (%2) still tripped", which, luup.devices[which].description)
+            setMessage( "Waiting for " .. luup.devices[which].description, tdev )
+            nextTick = 2
         else
-            -- Expired. Turn 'em off, unless hold on and a sensor is still tripped.
-            local holdOn = getVarNumeric( "HoldOn", 0, tdev )
-            local sensorTripped, which = isAnyTriggerOn( true, false, tdev )
-            if holdOn ~= 0 and sensorTripped then
-                D("timerTick() offTime %1 (past) but hold on and sensor %2 still tripped", offTime, which)
-                setMessage( "Held on by " .. luup.devices[which].description, tdev )
-                L("Timer %1 (%2) expired, but held on by %3 (%4)", tdev, luup.devices[tdev].description,
-                    which, luup.devices[which].description)
-                nextTick = 60 -- doesn't matter because state change on sensor to untriggered will re-evaluate for reset.
-            else
-                -- Not holding or no sensors still triggered
-                L("Timer %1 (%2) expired, resetting.", tdev, luup.devices[tdev].description)
-                reset( true, tdev )
-                nextTick = nil
-            end
+            -- Expired. 
+            L("Timer %1 (%2) expired, resetting.", tdev, luup.devices[tdev].description)
+            reset( true, tdev )
+            nextTick = nil
         end
     else
         -- idle
@@ -1129,16 +1282,17 @@ local function timerTick(tdev)
             if n ~= nil then
                 L("Retrying load of scene %1", n)
                 -- Yes, this does not load the trigger map. That's a detail to be
-                -- sorted later. We don't know which list to put the scene on at 
+                -- sorted later. We don't know which list to put the scene on at
                 -- this point. ??? TO-DO
                 getSceneData( n, tdev )
                 break -- one at a time
             end
         end
 
-        local lp = getVarNumeric( "ForcePoll", 0, tdev )
+        local lp = getVarNumeric( "ForcePoll", 0, tdev, TIMERSID )
         if lp > 0 then
-            if checkPoll( lp, tdev ) and ( nextTick == nil or nextTick > lp ) then
+            checkPoll( lp, tdev )
+            if nextTick == nil or nextTick > lp then
                 nextTick = lp
             end
         end
@@ -1164,7 +1318,7 @@ function tick(p)
     assert(stepStamp ~= nil)
     if stepStamp ~= runStamp then
         D( "tick(%1) stamp mismatch (got %2, expecting %3), newer thread running. Bye!",
-            luup.device, stepStamp, runStamp )
+            pluginDevice, stepStamp, runStamp )
         return
     end
 
@@ -1187,7 +1341,7 @@ function tick(p)
             D("tick() successful return from timerTick(%1)", t)
         end
     end
-    
+
     -- Things change while we work. Take another pass to find next task.
     local nextTick = nil
     for t,v in pairs(tickTasks) do
@@ -1197,7 +1351,7 @@ function tick(p)
             end
         end
     end
-    
+
     -- Figure out next master tick: soonest timer task tick, or 60 seconds
     local delay = 60
     if nextTick ~= nil then
@@ -1205,12 +1359,12 @@ function tick(p)
         if delay < 1 then delay = 1 elseif delay > 60 then delay = 60 end
     end
     tickTasks.master.when = now + delay
-    D("tick(%1) scheduling next master tick for %2 delay %3", luup.device, tickTasks.master.when, delay)
+    D("tick(%1) scheduling next master tick for %2 delay %3", pluginDevice, tickTasks.master.when, delay)
     luup.call_delay( "delayLightTick", delay, p )
 end
 
 -- Handle the timer-specific watch (dispatched from the watch callback)
-local function timerWatch( dev, sid, var, oldVal, newVal, tdev )
+local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
     D("timerWatch(%1,%2,%3,%4,%5,%6)", dev, sid, var, oldVal, newVal, tdev)
     local status = luup.variable_get( TIMERSID, "Status", tdev )
     local myname = luup.devices[tdev].description or tdev
@@ -1229,77 +1383,100 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev )
             setMessage( formatTime(delay), tdev )
         end
     else
-        local dinfo = timerState[tostring(tdev)].triggerMap[dev]
+        -- We respond to edges. The value has to change for us to actually care...
+        if oldVal == newVal then return end
+
+        local dinfo = timerState[tostring(tdev)].trigger[dev]
         if dinfo ~= nil then
+            -- Trigger device is changing state.
+            
             -- Make sure it's our status trigger service/variable
             if sid ~= dinfo.service or var ~= dinfo.variable then return end -- not something we handle
 
             -- We're good. Interpret status.
-            D("timerWatch() triggerMap[%1]=%2, newVal=%3 (%4)", dev, dinfo, newVal, luup.devices[dev].description)
+            D("timerWatch() triggers[%1]=%2, newVal=%3 (%4)", dev, dinfo, newVal, luup.devices[dev].description)
             local trig = isDeviceOn( dev, dinfo, newVal, tdev )
             D("timerWatch() device %1 trigger state is %2", dev, trig)
 
             addEvent{ event="watch", dev=tdev, device=dev, service=sid, variable=var, old=oldVal, new=newVal, triggered=trig }
-
-            -- We respond to edges. The value has to change for us to actually care...
-            if oldVal == newVal then return end
 
             -- Now...
             if trig then
                 -- Save trigger info
                 luup.variable_set( TIMERSID, "LastTrigger",
                     table.concat({ dev, os.time(), newVal, sid, var}, ","), tdev)
-                -- And evaluate
-                if status == STATE_AUTO and dinfo.type == "load" and dinfo.list == "on" then
-                    -- "OnList" load turning on while in auto--that's probably us doing it, so ignore.
-                    return
-                else
-                    -- Trigger for type
-                    L("Timer %6 (%7) %1 triggering by %2 %3 %4 (%5)", dinfo.trigger, dinfo.list, dinfo.type,
-                        dev, luup.devices[dev].description, tdev, myname)
-                    trigger( dinfo.trigger, tdev )
-                end
-            else
-                -- Something is turning off.
-                if dinfo.type == "load" and not isAnyTriggerOn( false, true, tdev ) then
-                    D("timerWatch() all loads now off in state %1, reset.", status)
-                    if status ~= STATE_IDLE then
-                        L("Timer %1 (%2) all loads off, timer resetting from %3.", tdev, luup.devices[tdev], status)
-                        -- We use resetTimer() here rather than reset(), because reset() sends all
-                        -- loads off. That's a problem for polled/non-instant loads, because
-                        -- we can get an "off" watch call for a polled load but the next polled
-                        -- load in the same config might be "on", but that isn't seen until a
-                        -- later poll (the human in the room sees two loads on, and one
-                        -- was turned off, and then the other goes off mysteriously before timer
-                        -- expires)
-                        resetTimer( tdev )
-                    end
-                elseif dinfo.type == "trigger" and status ~= STATE_IDLE then
-                    -- Trigger device turning off in active state.
-                    local holdOn = getVarNumeric( "HoldOn", 0, tdev )
-                    local offTime = getVarNumeric( "OffTime", 0, tdev )
-                    D("timerWatch() trigger reset in %4, HoldOn=%1, offTime=%2, passed=%3", holdOn, offTime, offTime <= os.time(), status)
-                    if holdOn ~= 0 and offTime <= os.time() and not isAnyTriggerOn( true, false, tdev ) then
-                        local left, ldev = isAnyTriggerOn( true, false, tdev )
-                        D("timerWatch() past offTime with hold, anyOn=%1 (%2)", left, ldev)
-                        if not left then
-                            -- A sensor has reset, we're not idle, hold is on, and we're past offTime, and all SENSORS (only) are now off...
-                            L("Timer %1 (%2) end of hold (%3)", tdev, myname, holdOn)
-                            if holdOn == 2 then
-                                -- When HoldOn = 2, extend off time beyond untrip. Otherwise, reset.
-                                trigger( status, tdev )
-                            else
-                                reset( true, tdev )
-                            end
-                        else
-                            L("Timer %1 (%2) holding for %3 (%4) (and maybe others)",
-                                tdev, myname, ldev, luup.devices[ldev].description)
-                        end
+                    
+                -- Trigger for type
+                L("Timer %1 (%2) AUTO triggering by list %3 dev %4 (%5)", tdev, myname, 
+                    dinfo.list, dev, luup.devices[dev].description)
+                trigger( STATE_AUTO, tdev )
+            elseif status ~= STATE_IDLE then
+                -- Tripped trigger device is resetting in active state
+                local holdOn = getVarNumeric( "HoldOn", 0, tdev, TIMERSID )
+                local offTime = getVarNumeric( "OffTime", 0, tdev, TIMERSID )
+                D("timerWatch() trigger reset in %4, HoldOn=%1, offTime=%2, passed=%3", holdOn, offTime, offTime <= os.time(), status)
+                local left, ldev = isAnyTriggerOn( true, false, tdev )
+                if holdOn ~= 0 and not left then
+                    -- Now no more trigger devices on
+                    L("Timer %1 (%2) end of hold (%3)", tdev, myname, holdOn)
+                    if holdOn == 2 then
+                        -- When HoldOn = 2, extend off time beyond untrip.
+                        trigger( status, tdev )
+                    elseif offTime <= os.time() then
+                        -- HoldOn == 1, time expired, immediate reset
+                        reset( false, tdev )
                     end
                 end
             end
         else
-            D("timerWatch() no triggerMap information for %1 (%2)", dev, luup.devices[dev])
+            -- It wasn't a trigger device. See if it's on the "on" or "off" lists.
+            dinfo = timerState[tostring(tdev)].on[dev]
+            if dinfo == nil then dinfo = timerState[tostring(tdev)].off[dev] end
+            if dinfo ~= nil then 
+                -- Make sure it's our service/variable
+                if sid ~= dinfo.service or var ~= dinfo.variable then return end -- not something we handle
+
+                -- We're good. Interpret status.
+                D("timerWatch() device %1 %5 map=%2, newVal=%3 (%4)", dev, dinfo, newVal, luup.devices[dev].description, dinfo.list)
+                local trig = isDeviceOn( dev, dinfo, newVal, tdev )
+                D("timerWatch() device %1 trigger state is %2", dev, trig)
+
+                addEvent{ event="watch", dev=tdev, device=dev, service=sid, variable=var, old=oldVal, new=newVal, triggered=trig }
+
+                if trig then
+                    -- Turning on.
+                    if status == STATE_AUTO then return end -- "on" list device turning on in AUTO, probably us doing it
+                    
+                    -- Save trigger info
+                    luup.variable_set( TIMERSID, "LastTrigger",
+                        table.concat({ dev, os.time(), newVal, sid, var}, ","), tdev)
+
+                    -- Trigger manual
+                    L("Timer %1 (%2) MANUAL triggering by list %3 dev %4 (%5)", tdev, myname, 
+                        dinfo.list, dev, luup.devices[dev].description)
+                    trigger( STATE_MANUAL, tdev )
+                else
+                    -- Something is turning off.
+                    if not isAnyTriggerOn( false, true, tdev ) then
+                        -- All loads are now off.
+                        D("timerWatch() all loads now off in state %1, reset.", status)
+                        if status ~= STATE_IDLE then
+                            L("Timer %1 (%2) all loads off, timer resetting from %3.", tdev, luup.devices[tdev].description, status)
+                            -- We use resetTimer() here rather than reset(), because reset() sends all
+                            -- loads off. That's a problem for polled/non-instant loads, because
+                            -- we can get an "off" watch call for a polled load but the next polled
+                            -- load in the same config might be "on", but that isn't seen until a
+                            -- later poll (the human in the room sees two loads on, and one
+                            -- was turned off, and then the other goes off mysteriously before timer
+                            -- expires)
+                            resetTimer( tdev )
+                        end
+                    -- else -- Something is still on. Just go with it.
+                    end
+                end
+            else
+                D("timerWatch() ignoring device change, must be inhibit or off list")
+            end
         end
     end
 end
@@ -1308,15 +1485,14 @@ end
 function watch( dev, sid, var, oldVal, newVal )
     D("watch(%1,%2,%3,%4,%5) luup.device(tdev)=%6", dev, sid, var, oldVal, newVal, luup.device)
     assert(var ~= nil) -- nil if service or device watch (can happen on openLuup)
-    assert(luup.device ~= nil) -- ??? openLuup?
-
+    
     local key = string.format("%d:%s/%s", dev, sid, var)
     if watchData[key] then
         for t in pairs(watchData[key]) do
             local tdev = tonumber(t, 10)
             if tdev ~= nil then
                 D("watch() dispatching to %1 (%2)", tdev, luup.devices[tdev].description)
-                local success,err = pcall( timerWatch, dev, sid, var, oldVal, newVal, tdev )
+                local success,err = pcall( timerWatch, dev, sid, var, oldVal, newVal, tdev, pluginDevice )
                 if not success then
                     L({level=1,msg="watch() dispatch error: %1"}, err)
                 end
@@ -1392,11 +1568,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
         }
         for k,v in pairs( luup.devices ) do
             if v.device_type == MYTYPE or v.device_type == TIMERTYPE then
-                local devinfo = getDevice( k, luup.device, v ) or {}
+                local devinfo = getDevice( k, pluginDevice, v ) or {}
                 if v.device_type == TIMERTYPE then
-                    devinfo.triggerMap = timerState[tostring(k)].triggerMap
-                    devinfo.eventList = timerState[tostring(k)].eventList
-                    devinfo.pollList = timerState[tostring(k)].pollList
+                    devinfo.timerState = timerState[tostring(k)]
                 end
                 table.insert( st.devices, devinfo )
             end

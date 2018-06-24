@@ -110,6 +110,12 @@ a "Trigger" device (below) is tripped. If 0, there is no automatic timing.
 This is the length (in seconds) of a *manual* timing cycle. A manual timing cycle is started when an "On" or "Off" device
 is turned on manually (not by the action of automatic triggering).
 
+#### Active Periods ####
+
+By default, DelayLight will operate continuously. If you would like a timer to limit automatic operation only to certain
+times of day, enter those times as active periods. The active periods are specified in 24-hour format (e.g. 20:00 is 8pm)
+in your local time. Periods that span midnight are handled (e.g. 22:00-06:00 means from 10pm to 6am the following day).
+
 #### Triggers ####
 
 The "Triggers" are the devices that will initiate (or extend) an automatic timing cycle when tripped. When used, these are
@@ -125,10 +131,17 @@ DelayLight timers can use another timer as a sensor (so your timers will appear 
 This is useful for tandem-triggering (following) of one timer after another. One can also start a timer based on the reset of another
 (using the invert checkbox).
 
+#### Inhibitors ####
+
+Inhibitors (new in 1.3) allow you to specify sensors that prevent automatic triggering. For example, you might use the Sunrise/Sunset
+plugin as an inhibitor, to prevent automatic triggering except after sunset.
+
 #### On Devices ####
 
 The "On" list devices are those devices that will be turned on when automatic timing is initiated. You may add multiple devices,
 and for each dimmer, set its dimming level. Alternately, you may select a single scene to control whatever devices you wish.
+
+When setting the "on" dimming level, if you leave the level field blank, the dimming level will not be changed from the device's previous stored level, and will simply be turned on using a binary on command (note that some dimming devices may still interpret this as turning on to 100%, so be sure to test your device).
 
 #### Off Devices ####
 
@@ -138,6 +151,8 @@ In a room with a motion sensor and multiple lights, a common use scenario is to 
 of the lights in the room as the "On" device, and all of the lights in the room as the "Off" devices. This causes the single
 "On" list device to come on in response to the motion sensor tripping, but when timing finishes, all lights in the room (including
 any that were turned on manually after motion started timing) are turned off.
+
+For dimmable devices, the dimming level can be set to any value, so in theory, one could configure a light that goes bright (on = 100) for motion, and then reduces to 50% (off = 50) when the auto timer expires. If the dimming level is left blank, the current dimming level of the device is not changed, and a binary off command is send instead.
 
 #### Hold-over ####
 

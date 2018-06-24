@@ -1,7 +1,7 @@
 {
-	"default_icon": "http://www.toggledbits.com/assets/delaylight/delaylight-default.png",
+	"default_icon": "https://www.toggledbits.com/assets/delaylight/delaylight-default.png",
 	"state_icons": [{
-		"img": "http://www.toggledbits.com/assets/delaylight/delaylight-timing.png",
+		"img": "https://www.toggledbits.com/assets/delaylight/delaylight-timing.png",
 		"conditions": [{
 			"service": "urn:toggledbits-com:serviceId:DelayLightTimer",
 			"variable": "Timing",
@@ -65,7 +65,7 @@
 					"top": "0",
 					"left": "0",
 					"Label": {
-						"lang_tag": "cmd_off",
+						"lang_tag": "cmd_reset",
 						"text": "Reset"
 					},
 					"Display": {
