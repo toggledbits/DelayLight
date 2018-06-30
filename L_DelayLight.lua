@@ -7,12 +7,12 @@
 
 module("L_DelayLight", package.seeall)
 
-local debugMode = true
+local debugMode = false
 
 local _PLUGIN_NAME = "DelayLight"
 local _PLUGIN_VERSION = "1.4"
 local _PLUGIN_URL = "https://www.toggledbits.com/delaylight"
-local _CONFIGVERSION = 00106
+local _CONFIGVERSION = 00107
 
 local MYSID = "urn:toggledbits-com:serviceId:DelayLight"
 local MYTYPE = "urn:schemas-toggledbits-com:device:DelayLight:1"
@@ -831,6 +831,8 @@ local function plugin_runOnce( pdev )
         luup.variable_set(MYSID, "NumChildren", 0, pdev)
         luup.variable_set(MYSID, "NumRunning", 0, pdev)
         luup.variable_set(MYSID, "Message", "", pdev)
+        luup.variable_set(MYSID, "DebugMode", 0, pdev)
+        
         luup.variable_set(MYSID, "Version", _CONFIGVERSION, pdev)
         return
     end
@@ -872,9 +874,9 @@ local function plugin_runOnce( pdev )
         luup.variable_set(MYSID, "Message", "", pdev)
     end
     
-    if s < 00106 then
+    if s < 00107 then
         L("Upgrading plugin %1 configuration to 00106...", pdev)
-        -- Nothing
+        luup.variable_set(MYSID, "DebugMode", 0, pdev)
     end
     
     -- Update version last.
@@ -1194,6 +1196,12 @@ function startPlugin( pdev )
 
     -- One-time stuff
     plugin_runOnce( pdev )
+    
+    -- Debug?
+    if getVarNumeric( "DebugMode", 0, pdev, MYSID ) ~= 0 then
+        debugMode = true
+        L("Debug mode enabled by state variable")
+    end
 
     -- Initialize and start the master timer tick
     runStamp = 1
@@ -1550,7 +1558,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
     local action = lul_parameters['action'] or lul_parameters['command'] or ""
     --local deviceNum = tonumber( lul_parameters['device'], 10 ) or luup.device
     if action == "debug" then
-        debugMode = true
+        debugMode = not debugMode
+        D("debug mode is now %1", debugMode)
+        return "Debug mode is now " .. iif( debugMode, "on", "off" ), "text/plain"
     end
 
     if action == "capabilities" then
