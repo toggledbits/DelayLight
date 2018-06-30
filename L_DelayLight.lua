@@ -875,7 +875,7 @@ local function plugin_runOnce( pdev )
     end
     
     if s < 00107 then
-        L("Upgrading plugin %1 configuration to 00106...", pdev)
+        L("Upgrading plugin %1 configuration to 00107...", pdev)
         luup.variable_set(MYSID, "DebugMode", 0, pdev)
     end
     
