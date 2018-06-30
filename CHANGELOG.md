@@ -1,7 +1,8 @@
 # Change Log #
 
-## Version 1.4 (development) ##
+## Version 1.4 (release candidate) ##
 
+* Improve status messages when hold-overs are used. Mode 1 (timer end hold) messages will now show "Holding for (devicename)" when waiting for a trigger to reset, and mode 2 (timer start hold) messages will now show "Waiting for (devicename)" when waiting for a trigger to reset.
 * Fix an issue with hold-over mode 2 stalling (issue #8).
 
 ## Version 1.3 (released) ##
