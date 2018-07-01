@@ -10,9 +10,9 @@ module("L_DelayLight", package.seeall)
 local debugMode = false
 
 local _PLUGIN_NAME = "DelayLight"
-local _PLUGIN_VERSION = "1.3"
+local _PLUGIN_VERSION = "1.4"
 local _PLUGIN_URL = "https://www.toggledbits.com/delaylight"
-local _CONFIGVERSION = 00106
+local _CONFIGVERSION = 00107
 
 local MYSID = "urn:toggledbits-com:serviceId:DelayLight"
 local MYTYPE = "urn:schemas-toggledbits-com:device:DelayLight:1"
@@ -325,7 +325,6 @@ end
 
 -- Interpret a trigger device spec to number and invert flag
 local function toDevnum( val )
-    D("toDevnum(%1)", val)
     local invert = false
     local v = string.match( val, "(%d+)=")
     if v ~= nil then val = v end
@@ -338,7 +337,6 @@ end
 
 -- Schedule a timer tick for a future (absolute) time.
 local function scheduleTick( timeTick, tdev )
-    D("scheduleTick(%1,%2)", timeTick, tdev)
     local tkey = tostring(tdev)
     if timeTick == 0 or timeTick == nil then
         tickTasks[tkey] = nil
@@ -356,7 +354,6 @@ local function scheduleTick( timeTick, tdev )
         tickTasks.master.when = timeTick
         local delay = timeTick - os.time()
         if delay < 1 then delay = 1 end
-        D("scheduleTick() rescheduling master tick for %1", delay)
         runStamp = runStamp + 1
         luup.call_delay( "delayLightTick", delay, runStamp )
     end
@@ -612,14 +609,18 @@ local function isAnyTriggerOn( includeSensors, includeLoads, tdev )
     assert( type(includeSensors) == "boolean" )
     assert( type(includeLoads) == "boolean" )
     assert( tdev ~= nil )
-    if includeSensors and isMapDeviceOn( timerState[tostring(tdev)].trigger, tdev ) then
-        return true
+    if includeSensors then
+        -- Check triggers
+        local res, devnum = isMapDeviceOn( timerState[tostring(tdev)].trigger, tdev )
+        if res then return true, devnum end
     end
-    if includeLoads and isMapDeviceOn( timerState[tostring(tdev)].on, tdev ) then
-        return true
-    end
-    if includeLoads and isMapDeviceOn( timerState[tostring(tdev)].off, tdev ) then
-        return true
+    if includeLoads then
+        -- Check "on" list loads
+        local res, devnum = isMapDeviceOn( timerState[tostring(tdev)].on, tdev )
+        if res then return true, devnum end
+        -- Check "off" list loads
+        res, devnum = isMapDeviceOn( timerState[tostring(tdev)].off, tdev )
+        if res then return true, devnum end
     end
     return false
 end
@@ -830,6 +831,8 @@ local function plugin_runOnce( pdev )
         luup.variable_set(MYSID, "NumChildren", 0, pdev)
         luup.variable_set(MYSID, "NumRunning", 0, pdev)
         luup.variable_set(MYSID, "Message", "", pdev)
+        luup.variable_set(MYSID, "DebugMode", 0, pdev)
+        
         luup.variable_set(MYSID, "Version", _CONFIGVERSION, pdev)
         return
     end
@@ -871,9 +874,9 @@ local function plugin_runOnce( pdev )
         luup.variable_set(MYSID, "Message", "", pdev)
     end
     
-    if s < 00106 then
-        L("Upgrading plugin %1 configuration to 00106...", pdev)
-        -- Nothing
+    if s < 00107 then
+        L("Upgrading plugin %1 configuration to 00107...", pdev)
+        luup.variable_set(MYSID, "DebugMode", 0, pdev)
     end
     
     -- Update version last.
@@ -992,6 +995,7 @@ local function trigger( state, tdev )
         if newTime > offTime then
             luup.variable_set( TIMERSID, "OffTime", newTime, tdev )
         end
+        scheduleDelay( 1, tdev )
     end
 end
 
@@ -1192,6 +1196,12 @@ function startPlugin( pdev )
 
     -- One-time stuff
     plugin_runOnce( pdev )
+    
+    -- Debug?
+    if getVarNumeric( "DebugMode", 0, pdev, MYSID ) ~= 0 then
+        debugMode = true
+        L("Debug mode enabled by state variable")
+    end
 
     -- Initialize and start the master timer tick
     runStamp = 1
@@ -1251,8 +1261,9 @@ local function timerTick(tdev)
             end
         elseif holdOn == 2 and sensorTripped then
             D("timerTick() hold-on mode 2 and sensor %1 (%2) still tripped", which, luup.devices[which].description)
-            setMessage( "Holding for " .. luup.devices[which].description, tdev )
-            nextTick = 2
+            trigger( status, tdev ) -- retrigger (extend timing)
+            setMessage( "Waiting for " .. luup.devices[which].description, tdev )
+            nextTick = 60
         elseif offTime > now then
             -- Not our time yet...
             local delay = offTime - now
@@ -1261,8 +1272,8 @@ local function timerTick(tdev)
             nextTick = scaleNextTick(delay)
         elseif holdOn == 1 and sensorTripped then
             D("timerTick() hold-on mode 1 and sensor %1 (%2) still tripped", which, luup.devices[which].description)
-            setMessage( "Waiting for " .. luup.devices[which].description, tdev )
-            nextTick = 2
+            setMessage( "Holding for " .. luup.devices[which].description, tdev )
+            nextTick = 60
         else
             -- Expired. 
             L("Timer %1 (%2) expired, resetting.", tdev, luup.devices[tdev].description)
@@ -1416,15 +1427,19 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
                 local offTime = getVarNumeric( "OffTime", 0, tdev, TIMERSID )
                 D("timerWatch() trigger reset in %4, HoldOn=%1, offTime=%2, passed=%3", holdOn, offTime, offTime <= os.time(), status)
                 local left, ldev = isAnyTriggerOn( true, false, tdev )
-                if holdOn ~= 0 and not left then
-                    -- Now no more trigger devices on
-                    L("Timer %1 (%2) end of hold (%3)", tdev, myname, holdOn)
-                    if holdOn == 2 then
-                        -- When HoldOn = 2, extend off time beyond untrip.
-                        trigger( status, tdev )
-                    elseif offTime <= os.time() then
-                        -- HoldOn == 1, time expired, immediate reset
-                        reset( false, tdev )
+                if holdOn ~= 0 then
+                    if not left then
+                        -- Now no more trigger devices on
+                        L("Timer %1 (%2) end of hold (%3)", tdev, myname, holdOn)
+                        if holdOn == 2 then
+                            -- When HoldOn = 2, extend off time beyond untrip.
+                            trigger( status, tdev )
+                        elseif offTime <= os.time() then
+                            -- HoldOn == 1, time expired, immediate reset
+                            reset( false, tdev )
+                        end
+                    else
+                        setMessage( iif( holdOn==1, "Hold-over", "Waiting" ) .. " for " .. luup.devices[ldev or tdev].description, tdev )
                     end
                 end
             end
@@ -1543,7 +1558,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
     local action = lul_parameters['action'] or lul_parameters['command'] or ""
     --local deviceNum = tonumber( lul_parameters['device'], 10 ) or luup.device
     if action == "debug" then
-        debugMode = true
+        debugMode = not debugMode
+        D("debug mode is now %1", debugMode)
+        return "Debug mode is now " .. iif( debugMode, "on", "off" ), "text/plain"
     end
 
     if action == "capabilities" then

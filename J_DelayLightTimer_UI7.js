@@ -379,16 +379,17 @@ var DelayLightTimer = (function(api) {
             var noroom = { "id": 0, "name": "No Room", "devices": [] };
             rooms[noroom.id] = noroom;
             for (i=0; i<devices.length; i+=1) {
-                var roomid = devices[i].room || 0;
+                var devobj = api.cloneObject( devices[i] );
+                devobj.friendlyName = "#" + devobj.id + " " + devobj.name;
+                deviceByNumber[devobj.id] = devobj;
+                var roomid = devobj.room || 0;
                 var roomObj = rooms[roomid];
                 if ( roomObj === undefined ) {
-                    roomObj = api.cloneObject(api.getRoomObject(roomid));
+                    roomObj = api.cloneObject( api.getRoomObject( roomid ) );
                     roomObj.devices = [];
                     rooms[roomid] = roomObj;
                 }
-                devices[i].friendlyName = "#" + devices[i].id + " " + devices[i].name;
-                deviceByNumber[devices[i].id] = devices[i];
-                roomObj.devices.push(devices[i]);
+                roomObj.devices.push( devobj );
             }
             var r = rooms.sort(
                 // Special sort for room name -- sorts "No Room" last
@@ -576,7 +577,7 @@ var DelayLightTimer = (function(api) {
             html += '<div class="clearfix">';
 
             html += '<div id="tbbegging"><em>Find DelayLight useful?</em> Please consider <a href="https://www.toggledbits.com/donate" target="_blank">a small donation</a> to support my work and this and other plugins. I am grateful for any support you choose to give!</div>';
-            html += '<div id="tbcopyright">DelayLight ver 1.3 &copy; 2016,2017,2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. For documentation and license, please see this project\'s <a href="https://github.com/toggledbits/DelayLight" target="_blank">GitHub repository</a>.</div>';
+            html += '<div id="tbcopyright">DelayLight ver 1.4 &copy; 2016,2017,2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. For documentation and license, please see this project\'s <a href="https://github.com/toggledbits/DelayLight" target="_blank">GitHub repository</a>.</div>';
 
             // Push generated HTML to page
             api.setCpanelContent(html);
