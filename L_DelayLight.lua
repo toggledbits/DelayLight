@@ -889,14 +889,21 @@ end
 function addTimer( pdev )
     D("addTimer(%1)", pdev)
     local ptr = luup.chdev.start( pdev )
+    local highd = 0
+    luup.variable_set( MYSID, "Message", "Adding timer. Please hard-refresh your browser.", pdev )
     for _,v in pairs(luup.devices) do
         if v.device_type == TIMERTYPE and v.device_num_parent == pdev then
+            D("addTimer() appending existing device %1 (%2)", v.id, v.description)
+            local dd = tonumber( string.match( v.id, "t(%d+)" ) )
+            if dd == nil then highd = highd + 1 elseif dd > highd then highd = dd end
             luup.chdev.append( pdev, ptr, v.id, v.description, "",
                 "D_DelayLightTimer.xml", "", "", false )
         end
     end
-    luup.chdev.append( pdev, ptr, "t"..os.time(), "DelayLight Timer", "",
-        "D_DelayLightTimer.xml", "", TIMERSID .. ",Version=0", false )
+    highd = highd + 1
+    D("addTimer() creating child d%1t%2", pdev, highd)
+    luup.chdev.append( pdev, ptr, string.format("d%dt%d", pdev, highd),
+        "DelayLight Timer " .. highd, "", "D_DelayLightTimer.xml", "", "", false )
     luup.chdev.sync( pdev, ptr )
     -- Should cause reload immediately.
 end
