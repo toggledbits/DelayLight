@@ -415,7 +415,7 @@ local function watchMap( m, tdev )
                 watchVariable( DIMMER_SID, "LoadLevelStatus", nn, tdev)
                 ix.service = DIMMER_SID
                 ix.variable = "LoadLevelStatus"
-                ix.valueOn = { comparison=">", value=0 }
+                ix.valueOn = { { comparison=">", value=0 } }
                 ix.watched = true
             elseif isSwitchType( nn, nil, tdev ) then -- light or switch
                 D("watchTriggers(): watching %1 (%2) as switch", nn, luup.devices[nn].description)
@@ -581,7 +581,7 @@ local function isDeviceOn( devnum, dinfo, newVal, tdev )
 
     -- dinfo, which contains the trigger map data for this device, as enough information that we can use
     -- it exclusively to see what our device state is.
-    local testValues = dinfo.valueOn or { comparison="!=", value=0 }
+    local testValues = dinfo.valueOn or { { comparison="!=", value=0 } }
     if type(testValues) ~= "table" then testValues = { testValues } end
     -- Get inversion state
     local inv = dinfo.invert
@@ -597,14 +597,14 @@ local function isDeviceOn( devnum, dinfo, newVal, tdev )
             op = "="
         end
         D("isDeviceOn() dev %1 checking %2 %3 %4", devnum, newVal, op, val)
-        if op == "" or op == "=" and iif( inv, newVal ~= tostring( val ), newVal == tostring( val ) ) then
-            return true        
-        elseif op == "!=" and iif( inv, newVal == tostring( val ), newVal ~= tostring( val ) ) then
-            return true
-        elseif op == ">" and iif( inv, nVal <= tonumber( val ), nVal > tonumber( val ) ) then
-            return true
-        elseif op == "<" and iif( inv, nVal >= tonumber( val ), nVal < tonumber( val ) ) then
-            return true
+        if op == "" or op == "=" then
+            if iif( inv, newVal ~= tostring( val ), newVal == tostring( val ) ) then return true end
+        elseif op == "!=" then
+            if iif( inv, newVal == tostring( val ), newVal ~= tostring( val ) ) then return true end
+        elseif op == ">" then
+            if iif( inv, nVal <= tonumber( val ), nVal > tonumber( val ) ) then return true end
+        elseif op == "<" then
+            if iif( inv, nVal >= tonumber( val ), nVal < tonumber( val ) ) then return true end
         elseif op == "in" then
             for _,v in pairs( split( val, "," ) or {} ) do
                 if v == newVal then return true end
