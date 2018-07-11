@@ -12,7 +12,7 @@ local debugMode = false
 local _PLUGIN_NAME = "DelayLight"
 local _PLUGIN_VERSION = "1.5develop"
 local _PLUGIN_URL = "https://www.toggledbits.com/delaylight"
-local _CONFIGVERSION = 00107
+local _CONFIGVERSION = 00108
 
 local MYSID = "urn:toggledbits-com:serviceId:DelayLight"
 local MYTYPE = "urn:schemas-toggledbits-com:device:DelayLight:1"
@@ -106,7 +106,7 @@ local function checkVersion(dev)
     if isOpenLuup then 
         local s = luup.variable_get( "openLuup", "Version", 2 ) -- hardcoded device?
         local y,m,d = string.match( s or "0.0.0", "^v(%d+)%.(%d+)%.(%d+)" )
-        local y = tonumber(y) * 10000 + tonumber(m)*100 + tonumber(d)
+        y = tonumber(y) * 10000 + tonumber(m)*100 + tonumber(d)
         D("checkVersion() checking openLuup version=%1 (numeric %2)", s, y)
         if y < 180400 or y >= 180611 then return true end -- See Github issue #5
         L({level=1,msg="openLuup version %1 is not supported. Please upgrade openLuup. See Github issue #5."}, y);
@@ -308,6 +308,17 @@ local function isSensorType( dev, obj, vtDev )
     return luup.device_supports_service(SENSOR_SID, dev)
 end
 
+-- Return true if device is dimmable
+local function isDimmerType( dev, obj, vtDev )
+    assert(type(dev) == "number")
+    obj = obj or luup.devices[dev]
+    if obj == nil then return false end
+    -- Can be recognized by category, implying the device is an actual switch or dimmer
+    if obj.category_num == 2 then return true end
+    -- Devices that implement dimmer behavior may be considered dimmers
+    return luup.device_supports_service(DIMMER_SID, dev)
+end
+
 -- Return true if we can treat the device as a switch
 local function isSwitchType( dev, obj, vtDev )
     assert(type(dev) == "number")
@@ -398,6 +409,13 @@ local function watchMap( m, tdev )
                 ix.service = SENSOR_SID
                 ix.variable = "Tripped"
                 ix.valueOn = "1"
+                ix.watched = true
+            elseif isDimmerType( nn, nil, tdev ) then -- dimmer/light
+                D("watchTriggers(): watching %1 (%2) as dimmer", nn, luup.devices[nn].description)
+                watchVariable( DIMMER_SID, "LoadLevelStatus", nn, tdev)
+                ix.service = DIMMER_SID
+                ix.variable = "LoadLevelStatus"
+                ix.valueOn = { comparison=">", value=0 }
                 ix.watched = true
             elseif isSwitchType( nn, nil, tdev ) then -- light or switch
                 D("watchTriggers(): watching %1 (%2) as switch", nn, luup.devices[nn].description)
@@ -563,16 +581,37 @@ local function isDeviceOn( devnum, dinfo, newVal, tdev )
 
     -- dinfo, which contains the trigger map data for this device, as enough information that we can use
     -- it exclusively to see what our device state is.
-    local testValues = dinfo.valueOn or "1"
+    local testValues = dinfo.valueOn or { comparison="!=", value=0 }
     if type(testValues) ~= "table" then testValues = { testValues } end
     -- Get inversion state
     local inv = dinfo.invert
-    -- For inequality, invert the inverted state :-)
-    if dinfo.comparison == '<>' or dinfo.comparison == "~=" or dinfo.comparison == "!=" then inv = not inv end
-    D("isDeviceOn() testing %1 val %2 against %3", devnum, newVal, testValues)
+    local nVal = tonumber( newVal ) or 0
+    D("isDeviceOn() testing %1 val %2 against %3 (invert=%4)", devnum, newVal, testValues, inv)
     for _,tv in ipairs( testValues ) do
-        if iif( inv, newVal ~= tostring( tv ), newVal == tostring( tv ) ) then
+        local op, val
+        if type( tv ) == "table" then
+            val = tv.value or 1
+            op = tv.comparison or "="
+        else
+            val = tv
+            op = "="
+        end
+        D("isDeviceOn() dev %1 checking %2 %3 %4", devnum, newVal, op, val)
+        if op == "" or op == "=" and iif( inv, newVal ~= tostring( val ), newVal == tostring( val ) ) then
+            return true        
+        elseif op == "!=" and iif( inv, newVal == tostring( val ), newVal ~= tostring( val ) ) then
             return true
+        elseif op == ">" and iif( inv, nVal <= tonumber( val ), nVal > tonumber( val ) ) then
+            return true
+        elseif op == "<" and iif( inv, nVal >= tonumber( val ), nVal < tonumber( val ) ) then
+            return true
+        elseif op == "in" then
+            for _,v in pairs( split( val, "," ) or {} ) do
+                if v == newVal then return true end
+            end
+        else
+            L({level=2,msg="%1 (%2) device 'on' condition %3 invalid, skipping (bug, please report)."},
+                tdev, luup.devices[tdev].description, tv)
         end
     end
     return false
@@ -800,6 +839,7 @@ local function timer_runOnce( tdev )
             luup.variable_set( TIMERSID, "HouseModes", "", tdev )
             luup.variable_set( TIMERSID, "InhibitDevices", "", tdev )
             luup.variable_set( TIMERSID, "ActivePeriods", "", tdev )
+            luup.variable_set( TIMERSID, "ManualOnScene", "1", tdev )
         end
         luup.variable_set( TIMERSID, "Version", _CONFIGVERSION, tdev )
         return
@@ -810,6 +850,11 @@ local function timer_runOnce( tdev )
         L("Upgrading timer %1 (%2) to 00106", tdev, luup.devices[tdev].description)
         luup.variable_set( TIMERSID, "InhibitDevices", "", tdev )
         luup.variable_set( TIMERSID, "ActivePeriods", "", tdev )
+    end
+    
+    if s < 00108 then
+        L("Upgrading timer %1 (%2) to 00108", tdev, luup.devices[tdev].description)
+        luup.variable_set( TIMERSID, "ManualOnScene", "1", tdev )
     end
 
     -- Update version last.
@@ -978,10 +1023,16 @@ local function trigger( state, tdev )
         luup.variable_set( TIMERSID, "OffTime", os.time() + onDelay + offDelay, tdev )
         scheduleDelay( scaleNextTick( onDelay + offDelay ), tdev )
 
-        -- Finally, if there's no onDelay, turn loads on. Do this last, so status
-        -- is properly set so when watches start coming for devices, the watch knows
-        -- it's a reaction to auto mode, not a manual start.
-        if onDelay == 0 then
+        -- Finally, if there's no onDelay, turn loads on. Do this last, 
+        -- so Status is properly set so when watches start coming for devices,
+        -- the watch knows it's a reaction to auto mode, not a manual start.
+        -- Prior to 1.5, a manual trigger would force all "on" devices to their
+        -- configured conditions (so switching one light on turns on all). As
+        -- of 1.5, this remains the default, but can be changed to leave devices
+        -- alone (for manual only) by setting ManualOnScene=0.
+        if onDelay == 0 and
+            ( state == STATE_AUTO or getVarNumeric( "ManualOnScene", 1, tdev, TIMERSID) ~= 0 )
+            then
             doLoadsOn( tdev )
         end
     else
@@ -1261,6 +1312,7 @@ local function timerTick(tdev)
             else
                 L("Timer %1 (%2) end of on delay, turning loads on.", tdev, luup.devices[tdev].description)
                 luup.variable_set( TIMERSID, "OnTime", 0, tdev )
+                -- N.B.: Since OnDelay/OnTime only applies to AUTO, no concern about forcing load states here.
                 doLoadsOn( tdev )
                 local delay = offTime - now
                 setMessage( "Delay Off " .. formatTime(delay), tdev )
