@@ -1,6 +1,6 @@
 # Change Log #
 
-## Version 1.5 (development branch) ##
+## Version 1.5 (stable-180711)
 
 * Fix issue #9: change in dimming level on a load that is already on is treated as a manual change to restart timing.
 * Implement ManualOnScene variable (default value 1) to provide option of not setting all "on" devices to configured state on manual trigger; to turn off this behavior and not change any other "on" device, set this value to 0.
