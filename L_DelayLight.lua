@@ -429,7 +429,7 @@ local function watchMap( m, tdev )
                 watchVariable( TIMERSID, "Timing", nn, tdev )
                 ix.service = TIMERSID
                 ix.variable = "Timing"
-                ix.valueOn = "1"
+                ix.valueOn = { { comparison=">", value=0 } }
                 ix.watched = true
             else
                 L({level=2,msg="Device %3 %1 (%2) doesn't seem to be a sensor or controllable load. Ignoring."},
@@ -996,6 +996,7 @@ local function trigger( state, tdev )
     local onDelay = 0
     if status == STATE_IDLE then
         -- Trigger from idle state
+        local timing = 1
         if state == STATE_AUTO then
             if not isActiveHouseMode( tdev ) then
                 D("trigger() not in an active house mode, not triggering")
@@ -1009,6 +1010,7 @@ local function trigger( state, tdev )
                 luup.variable_set( TIMERSID, "OnTime", 0, tdev, TIMERSID )
             else
                 luup.variable_set( TIMERSID, "OnTime", os.time() + onDelay, tdev )
+                timing = 2
                 D("trigger() configuring on delay %1 seconds", onDelay)
             end
         else
@@ -1018,7 +1020,7 @@ local function trigger( state, tdev )
             luup.variable_set( TIMERSID, "OnTime", 0, tdev )
         end
         luup.variable_set( TIMERSID, "Status", state, tdev )
-        luup.variable_set( TIMERSID, "Timing", 1, tdev )
+        luup.variable_set( TIMERSID, "Timing", timing, tdev )
         luup.variable_set( TIMERSID, "OffTime", os.time() + onDelay + offDelay, tdev )
         scheduleDelay( scaleNextTick( onDelay + offDelay ), tdev )
 
@@ -1311,6 +1313,7 @@ local function timerTick(tdev)
             else
                 L("Timer %1 (%2) end of on delay, turning loads on.", tdev, luup.devices[tdev].description)
                 luup.variable_set( TIMERSID, "OnTime", 0, tdev )
+                luup.variable_set( TIMERSID, "Timing", 1, tdev )
                 -- N.B.: Since OnDelay/OnTime only applies to AUTO, no concern about forcing load states here.
                 doLoadsOn( tdev )
                 local delay = offTime - now
