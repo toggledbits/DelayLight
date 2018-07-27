@@ -31,14 +31,13 @@ var DelayLightTimer = (function(api) {
     function onBeforeCpanelClose(args) {
         /* Send a reconfigure */
         if ( configModified ) {
-            alert("Notice: a Luup reload will now be requested so that your changes may take effect.");
+            alert("Notice: a Luup reload will now be requested so that your changes may take effect. This takes a minute, and the interface may be unresponsive during that time.");
             var devid = api.getCpanelDeviceId();
             api.performActionOnDevice( devid, "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "Reload", { } );
         }
     }
 
     function initPlugin() {
-        configModified = false;
     }
 
     function updateSceneData() {
@@ -648,7 +647,7 @@ var DelayLightTimer = (function(api) {
                         invert = true;
                     }
                     var container = jQuery("div#sensorgroup div.sensorrow:first").clone();
-                    if ( jQuery('select.sensor option[value="' + v + '"]', container).length == 0 ) {
+                    if ( jQuery('select.sensor option[value="' + v + '"]', container).length === 0 ) {
                         /* Selected device doesn't exist, so force add */
                         jQuery('select.sensor', container).append('<option value="' + v + '">Device #' + v + ' (custom)</option>');
                     }
@@ -691,7 +690,7 @@ var DelayLightTimer = (function(api) {
                         invert = true;
                     }
                     var container = jQuery("div#inhibitgroup div.inhibitrow:first").clone();
-                    if ( jQuery('select.inhibit option[value="' + v + '"]', container).length == 0 ) {
+                    if ( jQuery('select.inhibit option[value="' + v + '"]', container).length === 0 ) {
                         /* Selected device doesn't exist, so force add */
                         jQuery('select.inhibit', container).append('<option value="' + v + '">Device ' + v + ' (custom)</option>');
                     }
