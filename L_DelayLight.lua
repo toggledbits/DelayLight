@@ -10,7 +10,7 @@ module("L_DelayLight", package.seeall)
 local debugMode = false
 
 local _PLUGIN_NAME = "DelayLight"
-local _PLUGIN_VERSION = "1.5RC1"
+local _PLUGIN_VERSION = "1.5"
 local _PLUGIN_URL = "https://www.toggledbits.com/delaylight"
 local _CONFIGVERSION = 00109
 
