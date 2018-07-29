@@ -31,14 +31,13 @@ var DelayLightTimer = (function(api) {
     function onBeforeCpanelClose(args) {
         /* Send a reconfigure */
         if ( configModified ) {
-            alert("Notice: a Luup reload will now be requested so that your changes may take effect.");
+            alert("Notice: a Luup reload will now be requested so that your changes may take effect. This takes a minute, and the interface may be unresponsive during that time.");
             var devid = api.getCpanelDeviceId();
             api.performActionOnDevice( devid, "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "Reload", { } );
         }
     }
 
     function initPlugin() {
-        configModified = false;
     }
 
     function updateSceneData() {
@@ -577,7 +576,7 @@ var DelayLightTimer = (function(api) {
             html += '<div class="clearfix">';
 
             html += '<div id="tbbegging"><em>Find DelayLight useful?</em> Please consider <a href="https://www.toggledbits.com/donate" target="_blank">a small donation</a> to support my work and this and other plugins. I am grateful for any support you choose to give!</div>';
-            html += '<div id="tbcopyright">DelayLight ver 1.5develop &copy; 2016,2017,2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. For documentation and license, please see this project\'s <a href="https://github.com/toggledbits/DelayLight" target="_blank">GitHub repository</a>.</div>';
+            html += '<div id="tbcopyright">DelayLight ver 1.5 &copy; 2016,2017,2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. For documentation and license, please see this project\'s <a href="https://github.com/toggledbits/DelayLight" target="_blank">GitHub repository</a>.</div>';
 
             // Push generated HTML to page
             api.setCpanelContent(html);
@@ -648,7 +647,7 @@ var DelayLightTimer = (function(api) {
                         invert = true;
                     }
                     var container = jQuery("div#sensorgroup div.sensorrow:first").clone();
-                    if ( jQuery('select.sensor option[value="' + v + '"]', container).length == 0 ) {
+                    if ( jQuery('select.sensor option[value="' + v + '"]', container).length === 0 ) {
                         /* Selected device doesn't exist, so force add */
                         jQuery('select.sensor', container).append('<option value="' + v + '">Device #' + v + ' (custom)</option>');
                     }
@@ -691,7 +690,7 @@ var DelayLightTimer = (function(api) {
                         invert = true;
                     }
                     var container = jQuery("div#inhibitgroup div.inhibitrow:first").clone();
-                    if ( jQuery('select.inhibit option[value="' + v + '"]', container).length == 0 ) {
+                    if ( jQuery('select.inhibit option[value="' + v + '"]', container).length === 0 ) {
                         /* Selected device doesn't exist, so force add */
                         jQuery('select.inhibit', container).append('<option value="' + v + '">Device ' + v + ' (custom)</option>');
                     }

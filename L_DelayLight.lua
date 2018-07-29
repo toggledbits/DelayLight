@@ -10,7 +10,7 @@ module("L_DelayLight", package.seeall)
 local debugMode = false
 
 local _PLUGIN_NAME = "DelayLight"
-local _PLUGIN_VERSION = "1.5develop"
+local _PLUGIN_VERSION = "1.5"
 local _PLUGIN_URL = "https://www.toggledbits.com/delaylight"
 local _CONFIGVERSION = 00109
 
@@ -1488,7 +1488,7 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
                 D("timerWatch() trigger reset in %1, HoldOn=%2", status, holdOn)
                 local left, ldev = isAnyTriggerOn( true, false, tdev )
                 local onTime = getVarNumeric( "OnTime", 0, tdev, TIMERSID )
-                if not left and onTime > 0 and getVarNumeric("ResettableOnDelay", 1, tdev, TIMER_SID) ~= 0 then
+                if not left and onTime > 0 and getVarNumeric("ResettableOnDelay", 1, tdev, TIMERSID) ~= 0 then
                     -- All triggers reset during on-delay. Reset timer.
                     L("Timer %1 (%2) all triggers reset during on-delay; resetting.",
                         tdev, luup.devices[tdev].description)

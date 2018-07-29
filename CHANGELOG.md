@@ -1,6 +1,6 @@
 # Change Log #
 
-## Version 1.5 (development branch) ##
+## Version 1.5 (released) ##
 
 * If all triggers reset during on delay, reset the timer (don't complete the on delay and turn on loads). This is a change in behavior from prior version. If you want the old behavior (once auto-triggered, the on and off delays complete no matter the state of triggers), set state variable ResettableOnDelay to 0.
 * Fix issue #9: change in dimming level on a load that is already on is treated as a manual change to restart timing.
