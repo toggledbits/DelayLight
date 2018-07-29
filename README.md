@@ -165,8 +165,12 @@ lights are held on, even if there's no motion detected and the timer expires.
 
 #### On Delay ####
 
-By default, when triggered, the "on" list devices are turned on immediately. Setting a non-zero "on" delay delays that action
+Normally, when triggered, the "on" list devices are turned on immediately. Setting a non-zero "on" delay delays that action
 by the specified number of seconds. Off-delay timing does not begin until lights are turned on (i.e. after the on delay ends).
+
+As of version 1.5, if all triggers reset during the "on" delay, the timer will reset (the loads will *not* be turned on). 
+To have the "on" delay complete unconditionally and turn the lights on for the "off" delay period
+(the behavior prior to 1.5), set the `ResettableOnDelay` state variable to 0.
 
 #### House Modes ####
 
@@ -232,13 +236,33 @@ When disabled, the DelayLight device will complete any in-progress timing cycle 
     luup.call_action( "urn:toggledbits.com:serviceId:DelayLightTimer", "SetEnabled", { newEnabledValue="1" }, deviceNum )
 </code>
 
-## Future Thoughts ##
+## Recipes ##
 
-Although I'm trying to keep this plugin in the realm of the simple, I can see that some extensions are necessary. If you have a suggestion,
-feel free to make it. Here's what I'm thinking about at the moment:
+If you come up with an interesting configuration that you think would make a good recipe here, please PM me via the Vera forums (http://forum.micasaverde.com/index.php/topic,60498.0.html).
 
-* Rather than being limited to the SecuritySensor1 service for triggers, allow any event-driven state for any device to be a trigger. This would allow, for example, my theater to inhibit reset while the AV system is on (i.e. lights don't change while we're watching a movie).
-* The natural extension of the above is more direct control/tracking for all devices, or as many as possible. I've already made two passes at this, and backed off. Both worked, but I didn't feel I had enough knowledge about how *other people* would use this plugin to have a good feel for the extent I needed to take this. In the first implementation, I used Vera's static JSON data to provide clues about the behavior and capabilities of devices, but I was concerned that I didn't have a good enough understanding and sampling of all of the various interpretations out there for what static data could contain (it has evolved over the years, and varies widely between plugin authors), so the handling of unexpected or missing values needs to be extensive. The second implementation uses a custom device description file (web-updateable) to address the consistency issue. This also would let me quickly add or fix functionality by revising the file rather than the plugin, but I'm also hesitant because I don't yet feel I've thought through all of the scenarios for changes, especially changes that could potentially break running configurations (e.g. renaming a state or condition due to error, conflict, or just spelling). All code is preserved, and I'm continuing to self-debate the merits and weaknesses of these approaches.
+### Motion-sensor Light ###
+
+### Garage Door Left Open Notification ###
+
+If you want to use a DelayLightTimer to notify you when the garage door has been left open too long:
+
+1. Create a new timer device (see Adding Timers above);
+1. Set the automatic timing period to 5 seconds, and the manual timing period to 0;
+1. Set the trigger device to your garage door open/close sensor;
+1. Set the "on" delay to the limit (in seconds) that the door is allowed to be open (e.g. 1800 = 30 minutes);
+1. Go back to the Control tab, and hit the Notifications tab (you may need to scroll to see it);
+1. Add Notification for: `Timing State Changes`
+1. State: `device starts off-delay timing`
+1. Select the users to receive notifications, then hit Add.
+1. Use the "Back" button in the tab strip (not your browser's "back" button) to exit configuration for the timer--this will cause a Luup reload.
+1. Once Luup has reloaded, make sure your new timer is enabled, and give it a try.
+
+You could also trigger a scene, and/or have the scene send the
+notification in addition to doing other work. To do that,
+create your scene and select it as the "on" list device.
+
+If you're only concerned about the garage door being left open at night, you can set an "active period" for the timer,
+or use any of the various plugins that report day/night as an inhibitor.
 
 ## License ##
 

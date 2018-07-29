@@ -295,10 +295,16 @@
                         "timing": "1",
                         "HumanFriendlyText": {
                             "lang_tag": "tb_st_timing",
-                            "text": "_DEVICE_NAME_ starts timing"
+                            "text": "_DEVICE_NAME_ starts off-delay timing"
                         }
-                    }
-                ],
+                    },
+                    {
+                        "timing": "2",
+                        "HumanFriendlyText": {
+                            "lang_tag": "tb_st_timing",
+                            "text": "_DEVICE_NAME_ starts on-delay timing"
+                        }
+                    }                ],
                 "prefix": {
                     "lang_tag": "tb_state",
                     "text": "State"

@@ -10,9 +10,9 @@ module("L_DelayLight", package.seeall)
 local debugMode = false
 
 local _PLUGIN_NAME = "DelayLight"
-local _PLUGIN_VERSION = "1.5stable-180711"
+local _PLUGIN_VERSION = "1.5"
 local _PLUGIN_URL = "https://www.toggledbits.com/delaylight"
-local _CONFIGVERSION = 00108
+local _CONFIGVERSION = 00109
 
 local MYSID = "urn:toggledbits-com:serviceId:DelayLight"
 local MYTYPE = "urn:schemas-toggledbits-com:device:DelayLight:1"
@@ -429,7 +429,7 @@ local function watchMap( m, tdev )
                 watchVariable( TIMERSID, "Timing", nn, tdev )
                 ix.service = TIMERSID
                 ix.variable = "Timing"
-                ix.valueOn = "1"
+                ix.valueOn = { { comparison=">", value=0 } }
                 ix.watched = true
             else
                 L({level=2,msg="Device %3 %1 (%2) doesn't seem to be a sensor or controllable load. Ignoring."},
@@ -840,21 +840,24 @@ local function timer_runOnce( tdev )
             luup.variable_set( TIMERSID, "InhibitDevices", "", tdev )
             luup.variable_set( TIMERSID, "ActivePeriods", "", tdev )
             luup.variable_set( TIMERSID, "ManualOnScene", "1", tdev )
+            luup.variable_set( TIMERSID, "ResettableOnDelay", "1", tdev )
         end
         luup.variable_set( TIMERSID, "Version", _CONFIGVERSION, tdev )
         return
     end
 
     -- Consider per-version changes.
+    L("%2 (%1) applying changes to config up to rev %3", tdev, luup.devices[tdev].description, _CONFIGVERSION)
     if s < 00106 then
-        L("Upgrading timer %1 (%2) to 00106", tdev, luup.devices[tdev].description)
         luup.variable_set( TIMERSID, "InhibitDevices", "", tdev )
         luup.variable_set( TIMERSID, "ActivePeriods", "", tdev )
     end
-    
+    -- Nothing for timers in 00107, master device only.
     if s < 00108 then
-        L("Upgrading timer %1 (%2) to 00108", tdev, luup.devices[tdev].description)
         luup.variable_set( TIMERSID, "ManualOnScene", "1", tdev )
+    end
+    if s < 00109 then
+        luup.variable_set( TIMERSID, "ResettableOnDelay", "1", tdev )
     end
 
     -- Update version last.
@@ -883,8 +886,8 @@ local function plugin_runOnce( pdev )
     end
 
     -- Consider per-version changes.
+    L("Applying config upgrades to plugin to version %1", _CONFIGVERSION)
     if s < 00103 then
-        L("Upgrading plugin %1 to 00103...", pdev)
         -- Conversion to 00103. Find all DLs incl this one and create a child
         -- of this one for it. Link it via the OldDevice state variable, which
         -- we'll detect separately.
@@ -911,16 +914,12 @@ local function plugin_runOnce( pdev )
         L("RELOADING LUUP!")
         luup.reload()
     end
-
     if s < 00105 then
-        L("Upgrading plugin %1 configuration to 00105...", pdev)
         luup.variable_set(MYSID, "NumChildren", 0, pdev)
         luup.variable_set(MYSID, "NumRunning", 0, pdev)
         luup.variable_set(MYSID, "Message", "", pdev)
     end
-    
     if s < 00107 then
-        L("Upgrading plugin %1 configuration to 00107...", pdev)
         luup.variable_set(MYSID, "DebugMode", 0, pdev)
     end
     
@@ -997,6 +996,7 @@ local function trigger( state, tdev )
     local onDelay = 0
     if status == STATE_IDLE then
         -- Trigger from idle state
+        local timing = 1
         if state == STATE_AUTO then
             if not isActiveHouseMode( tdev ) then
                 D("trigger() not in an active house mode, not triggering")
@@ -1010,6 +1010,7 @@ local function trigger( state, tdev )
                 luup.variable_set( TIMERSID, "OnTime", 0, tdev, TIMERSID )
             else
                 luup.variable_set( TIMERSID, "OnTime", os.time() + onDelay, tdev )
+                timing = 2
                 D("trigger() configuring on delay %1 seconds", onDelay)
             end
         else
@@ -1019,7 +1020,7 @@ local function trigger( state, tdev )
             luup.variable_set( TIMERSID, "OnTime", 0, tdev )
         end
         luup.variable_set( TIMERSID, "Status", state, tdev )
-        luup.variable_set( TIMERSID, "Timing", 1, tdev )
+        luup.variable_set( TIMERSID, "Timing", timing, tdev )
         luup.variable_set( TIMERSID, "OffTime", os.time() + onDelay + offDelay, tdev )
         scheduleDelay( scaleNextTick( onDelay + offDelay ), tdev )
 
@@ -1312,6 +1313,7 @@ local function timerTick(tdev)
             else
                 L("Timer %1 (%2) end of on delay, turning loads on.", tdev, luup.devices[tdev].description)
                 luup.variable_set( TIMERSID, "OnTime", 0, tdev )
+                luup.variable_set( TIMERSID, "Timing", 1, tdev )
                 -- N.B.: Since OnDelay/OnTime only applies to AUTO, no concern about forcing load states here.
                 doLoadsOn( tdev )
                 local delay = offTime - now
@@ -1483,13 +1485,19 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
             elseif status ~= STATE_IDLE then
                 -- Tripped trigger device is resetting in active state
                 local holdOn = getVarNumeric( "HoldOn", 0, tdev, TIMERSID )
-                local offTime = getVarNumeric( "OffTime", 0, tdev, TIMERSID )
-                D("timerWatch() trigger reset in %4, HoldOn=%1, offTime=%2, passed=%3", holdOn, offTime, offTime <= os.time(), status)
+                D("timerWatch() trigger reset in %1, HoldOn=%2", status, holdOn)
                 local left, ldev = isAnyTriggerOn( true, false, tdev )
-                if holdOn ~= 0 then
+                local onTime = getVarNumeric( "OnTime", 0, tdev, TIMERSID )
+                if not left and onTime > 0 and getVarNumeric("ResettableOnDelay", 1, tdev, TIMERSID) ~= 0 then
+                    -- All triggers reset during on-delay. Reset timer.
+                    L("Timer %1 (%2) all triggers reset during on-delay; resetting.",
+                        tdev, luup.devices[tdev].description)
+                    resetTimer( tdev )
+                elseif holdOn ~= 0 then
                     if not left then
-                        -- Now no more trigger devices on
-                        L("Timer %1 (%2) end of hold (%3)", tdev, myname, holdOn)
+                        -- Now no more trigger devices on in hold-over (mode 1 or 2)
+                        local offTime = getVarNumeric( "OffTime", 0, tdev, TIMERSID )
+                        L("Timer %1 (%2) end of hold (%3); offTime=%4", tdev, myname, holdOn, offTime)
                         if holdOn == 2 then
                             -- When HoldOn = 2, extend off time beyond untrip.
                             trigger( status, tdev )
