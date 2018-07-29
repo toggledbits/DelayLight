@@ -1,5 +1,12 @@
 # Change Log #
 
+## Version 1.5 (released) ##
+
+* If all triggers reset during on delay, reset the timer (don't complete the on delay and turn on loads). This is a change in behavior from prior version. If you want the old behavior (once auto-triggered, the on and off delays complete no matter the state of triggers), set state variable ResettableOnDelay to 0.
+* Fix issue #9: change in dimming level on a load that is already on is treated as a manual change to restart timing.
+* Implement ManualOnScene variable (default value 1) to provide option of not setting all "on" devices to configured state on manual trigger; to turn off this behavior and not change any other "on" device, set this value to 0.
+* Move "Settings" tab to top nav, which is consistent with new style for my plugins.
+
 ## Version 1.4 (released) ##
 
 * Allow enable of debug output via DebugMode state variable, fix debug mode request handler.

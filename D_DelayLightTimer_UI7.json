@@ -19,7 +19,7 @@
 			},
 			"Position": "0",
 			"TabType": "flash",
-            "top_navigation_tab": 1,
+            "TopNavigationTab": 1,
 			"ControlGroup": [{
 					"id": "1",
 					"scenegroup": "1"
@@ -183,6 +183,7 @@
 			},
 			"Position": "1",
 			"TabType": "javascript",
+            "TopNavigationTab": 1,
 			"ScriptName": "J_DelayLightTimer_UI7.js",
 			"Function": "DelayLightTimer.doSettings"
 		},
@@ -294,10 +295,16 @@
                         "timing": "1",
                         "HumanFriendlyText": {
                             "lang_tag": "tb_st_timing",
-                            "text": "_DEVICE_NAME_ starts timing"
+                            "text": "_DEVICE_NAME_ starts off-delay timing"
                         }
-                    }
-                ],
+                    },
+                    {
+                        "timing": "2",
+                        "HumanFriendlyText": {
+                            "lang_tag": "tb_st_timing",
+                            "text": "_DEVICE_NAME_ starts on-delay timing"
+                        }
+                    }                ],
                 "prefix": {
                     "lang_tag": "tb_state",
                     "text": "State"
