@@ -1,5 +1,10 @@
 # Change Log #
 
+## Version 1.6 (develop branch)
+
+* Allow inhibitor to be a switch (e.g. SwitchPower1 or VSwitch), so Day/Night plugin works as inhibitor.
+* Fix bug in setup of inhibitors.
+
 ## Version 1.5 (released) ##
 
 * If all triggers reset during on delay, reset the timer (don't complete the on delay and turn on loads). This is a change in behavior from prior version. If you want the old behavior (once auto-triggered, the on and off delays complete no matter the state of triggers), set state variable ResettableOnDelay to 0.

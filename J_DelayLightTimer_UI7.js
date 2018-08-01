@@ -268,22 +268,21 @@ var DelayLightTimer = (function(api) {
 
     function isDimmer( devobj ) {
         if ( undefined === devobj ) { return false; }
-        return devobj.category_num == 2 || deviceImplements( devobj, "urn:upnp-org:serviceId:Dimming1" );
+        return devobj.category_num === 2 || deviceImplements( devobj, "urn:upnp-org:serviceId:Dimming1" );
     }
 
     function isSwitch( devobj ) {
         if ( undefined === devobj ) { return false; }
-        return ( devobj.category_num == 3 ) ||
-            devobj.device_type == "urn:schemas-upnp-org:device:VSwitch:1" ||
-            deviceImplements( devobj, "urn:upnp-org:serviceId:SwitchPower1" ) ||
-            isDimmer( devobj )
+        return ( devobj.category_num === 3 ) ||
+            devobj.device_type === "urn:schemas-upnp-org:device:VSwitch:1" ||
+            deviceImplements( devobj, "urn:upnp-org:serviceId:SwitchPower1" )
             ;
     }
 
     function isControllable( devobj ) {
         // just this for now, in future look at devCap
         if ( devobj.device_type == deviceType ) { return true; } /* Treat ourselves as controllable */
-        if ( isSwitch( devobj ) ) {
+        if ( isSwitch( devobj ) || isDimmer( devobj ) ) {
             return true;
         }
         return false;
@@ -478,7 +477,8 @@ var DelayLightTimer = (function(api) {
                         if ( roomObj.devices && roomObj.devices.length ) {
                             var first = true; // per-room first
                             for (j=0; j<roomObj.devices.length; ++j) {
-                                if ( roomObj.devices[j].id == myDevice || !isSensor( roomObj.devices[j] ) ) {
+                                if ( roomObj.devices[j].id == myDevice || 
+                                        ! ( isSensor( roomObj.devices[j] ) || isSwitch( roomObj.devices[j] ) ) ) {
                                     continue;
                                 }
                                 if (first)
@@ -576,7 +576,11 @@ var DelayLightTimer = (function(api) {
             html += '<div class="clearfix">';
 
             html += '<div id="tbbegging"><em>Find DelayLight useful?</em> Please consider <a href="https://www.toggledbits.com/donate" target="_blank">a small donation</a> to support my work and this and other plugins. I am grateful for any support you choose to give!</div>';
-            html += '<div id="tbcopyright">DelayLight ver 1.5 &copy; 2016,2017,2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. For documentation and license, please see this project\'s <a href="https://github.com/toggledbits/DelayLight" target="_blank">GitHub repository</a>.</div>';
+            html += '<div id="tbcopyright">DelayLight ver 1.6develop &copy; 2016,2017,2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. For documentation and license, please see this project\'s <a href="https://github.com/toggledbits/DelayLight" target="_blank">GitHub repository</a>.</div>';
+            html += '<div id="supportlinks">Support links: ' +
+                ' <a href="' + api.getDataRequestURL() + '?id=lr_DelayLight&action=debug" target="_blank">Toggle&nbsp;Debug</a>' +
+                ' &bull; <a href="/cgi-bin/cmh/log.sh?Device=LuaUPnP" target="_blank">Log&nbsp;File</a>' +
+                ' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_DelayLight&action=status" target="_blank">Plugin&nbsp;Status</a></div>';
 
             // Push generated HTML to page
             api.setCpanelContent(html);
