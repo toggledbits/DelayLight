@@ -268,22 +268,21 @@ var DelayLightTimer = (function(api) {
 
     function isDimmer( devobj ) {
         if ( undefined === devobj ) { return false; }
-        return devobj.category_num == 2 || deviceImplements( devobj, "urn:upnp-org:serviceId:Dimming1" );
+        return devobj.category_num === 2 || deviceImplements( devobj, "urn:upnp-org:serviceId:Dimming1" );
     }
 
     function isSwitch( devobj ) {
         if ( undefined === devobj ) { return false; }
-        return ( devobj.category_num == 3 ) ||
-            devobj.device_type == "urn:schemas-upnp-org:device:VSwitch:1" ||
-            deviceImplements( devobj, "urn:upnp-org:serviceId:SwitchPower1" ) ||
-            isDimmer( devobj )
+        return ( devobj.category_num === 3 ) ||
+            devobj.device_type === "urn:schemas-upnp-org:device:VSwitch:1" ||
+            deviceImplements( devobj, "urn:upnp-org:serviceId:SwitchPower1" )
             ;
     }
 
     function isControllable( devobj ) {
         // just this for now, in future look at devCap
         if ( devobj.device_type == deviceType ) { return true; } /* Treat ourselves as controllable */
-        if ( isSwitch( devobj ) ) {
+        if ( isSwitch( devobj ) || isDimmer( devobj ) ) {
             return true;
         }
         return false;
@@ -478,7 +477,8 @@ var DelayLightTimer = (function(api) {
                         if ( roomObj.devices && roomObj.devices.length ) {
                             var first = true; // per-room first
                             for (j=0; j<roomObj.devices.length; ++j) {
-                                if ( roomObj.devices[j].id == myDevice || !isSensor( roomObj.devices[j] ) ) {
+                                if ( roomObj.devices[j].id == myDevice || 
+                                        ! ( isSensor( roomObj.devices[j] ) || isSwitch( roomObj.devices[j] ) ) ) {
                                     continue;
                                 }
                                 if (first)
