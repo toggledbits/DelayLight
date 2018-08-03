@@ -761,7 +761,8 @@ local function checkPoll( lp, tdev )
     alldevs = getKeys( tState.on, alldevs )
     alldevs = getKeys( tState.off, alldevs )
     alldevs = getKeys( tState.inhibit, alldevs )
-    for _,devnum in ipairs( alldevs ) do
+    for _,ds in ipairs( alldevs ) do
+        local devnum = tonumber(ds) or -1
         local ld = luup.devices[devnum]
         if ld ~= nil and luup.device_supports_service("urn:micasaverde-com:serviceId:ZWaveDevice1", devnum) and 
                 not isOnList( tState.pollList, devnum ) then
@@ -778,7 +779,7 @@ local function checkPoll( lp, tdev )
                 end
             end
         else
-            D("checkPoll() skipping %1 (%2), not a ZWaveDevice", devnum, ld.description)
+            D("checkPoll() skipping %1 (%2), not a ZWaveDevice", devnum, (ld or {}).description)
         end
     end
     -- Poll one device per check
@@ -1460,7 +1461,7 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
         -- We respond to edges. The value has to change for us to actually care...
         if oldVal == newVal then return end
 
-        local dinfo = timerState[tostring(tdev)].trigger[dev]
+        local dinfo = timerState[tostring(tdev)].trigger[tostring(dev)]
         if dinfo ~= nil then
             -- Trigger device is changing state.
             
@@ -1514,8 +1515,8 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
             end
         else
             -- It wasn't a trigger device. See if it's on the "on" or "off" lists.
-            dinfo = timerState[tostring(tdev)].on[dev]
-            if dinfo == nil then dinfo = timerState[tostring(tdev)].off[dev] end
+            dinfo = timerState[tostring(tdev)].on[tostring(dev)]
+            if dinfo == nil then dinfo = timerState[tostring(tdev)].off[tostring(dev)] end
             if dinfo ~= nil then 
                 -- Make sure it's our service/variable
                 if sid ~= dinfo.service or var ~= dinfo.variable then return end -- not something we handle
@@ -1559,7 +1560,7 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
                     end
                 end
             else
-                D("timerWatch() ignoring device change, must be inhibit or off list")
+                D("timerWatch() ignoring device change, must be inhibit list")
             end
         end
     end
