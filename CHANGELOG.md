@@ -1,5 +1,7 @@
 # Change Log #
 
+## Version 1.7 (develop branch)
+
 ## Version 1.6 (released)
 
 * Allow inhibitor to be a switch, so VirtualSwitch and other plugins that implement SwitchPower1 can be used.
