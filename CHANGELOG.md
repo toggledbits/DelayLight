@@ -1,9 +1,9 @@
 # Change Log #
 
-## Version 1.6 (stable branch)
+## Version 1.6 (released)
 
-* Allow inhibitor to be a switch (e.g. SwitchPower1 or VSwitch), so Day/Night plugin works as inhibitor.
-* Fix bug in setup of inhibitors.
+* Allow inhibitor to be a switch, so VirtualSwitch and other plugins that implement SwitchPower1 can be used.
+* Fix bug in setup/watch of inhibitors.
 
 ## Version 1.5 (released) ##
 
