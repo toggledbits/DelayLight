@@ -9,8 +9,9 @@ module("L_DelayLight", package.seeall)
 
 local debugMode = false
 
+local _PLUGIN_ID = 9036
 local _PLUGIN_NAME = "DelayLight"
-local _PLUGIN_VERSION = "1.5"
+local _PLUGIN_VERSION = "1.6"
 local _PLUGIN_URL = "https://www.toggledbits.com/delaylight"
 local _CONFIGVERSION = 00109
 
@@ -403,29 +404,30 @@ local function watchMap( m, tdev )
         if luup.devices[nn] == nil then
             L({level=2,msg="Device %1 (%2 list) not found... it may have been deleted!"}, nn, ix.list)
         elseif not (ix.watched or false) then
+            ix.devicename = luup.devices[nn].description
             if isSensorType( nn, nil, tdev ) then -- Security/binary sensor (has tripped/non-tripped)
-                D("watchTriggers(): watching %1 (%2) as sensor", nn, luup.devices[nn].description)
+                D("watchTriggers(): watching %1 (%2) as sensor", nn, ix.devicename)
                 watchVariable( SENSOR_SID, "Tripped", nn, tdev)
                 ix.service = SENSOR_SID
                 ix.variable = "Tripped"
                 ix.valueOn = "1"
                 ix.watched = true
             elseif isDimmerType( nn, nil, tdev ) then -- dimmer/light
-                D("watchTriggers(): watching %1 (%2) as dimmer", nn, luup.devices[nn].description)
+                D("watchTriggers(): watching %1 (%2) as dimmer", nn, ix.devicename)
                 watchVariable( DIMMER_SID, "LoadLevelStatus", nn, tdev)
                 ix.service = DIMMER_SID
                 ix.variable = "LoadLevelStatus"
                 ix.valueOn = { { comparison=">", value=0 } }
                 ix.watched = true
             elseif isSwitchType( nn, nil, tdev ) then -- light or switch
-                D("watchTriggers(): watching %1 (%2) as switch", nn, luup.devices[nn].description)
+                D("watchTriggers(): watching %1 (%2) as switch", nn, ix.devicename)
                 watchVariable( SWITCH_SID, "Status", nn, tdev )
                 ix.service = SWITCH_SID
                 ix.variable = "Status"
                 ix.valueOn = "1"
                 ix.watched = true
             elseif luup.devices[nn].device_type == TIMERTYPE then
-                D("watchTriggers(): watching %1 (%2) as DelayLight", nn, luup.devices[nn].description)
+                D("watchTriggers(): watching %1 (%2) as DelayLight", nn, ix.devicename)
                 watchVariable( TIMERSID, "Timing", nn, tdev )
                 ix.service = TIMERSID
                 ix.variable = "Timing"
@@ -433,19 +435,19 @@ local function watchMap( m, tdev )
                 ix.watched = true
             else
                 L({level=2,msg="Device %3 %1 (%2) doesn't seem to be a sensor or controllable load. Ignoring."},
-                    nn, luup.devices[nn].description, ix.list)
+                    nn, ix.devicename, ix.list)
             end
         else
-            D("watchTriggers() device %1 (%2) already on watch", nn, luup.devices[nn])
+            D("watchTriggers() device %1 (%2) already on watch", nn, (luup.devices[nn] or {}).description)
         end
     end
 end
 
 local function watchTriggers( tdev ) 
     watchMap( timerState[tostring(tdev)].trigger, tdev )
+    watchMap( timerState[tostring(tdev)].inhibit, tdev )
     watchMap( timerState[tostring(tdev)].on, tdev )
     watchMap( timerState[tostring(tdev)].off, tdev )
-    -- We don't watch inhibits, we just look at them as needed
 end
 
 -- Load a scene into the trigger map.
@@ -584,7 +586,7 @@ local function isDeviceOn( devnum, dinfo, newVal, tdev )
     local testValues = dinfo.valueOn or { { comparison="!=", value=0 } }
     if type(testValues) ~= "table" then testValues = { testValues } end
     -- Get inversion state
-    local inv = dinfo.invert
+    local inv = dinfo.invert or false
     local nVal = tonumber( newVal ) or 0
     D("isDeviceOn() testing %1 val %2 against %3 (invert=%4)", devnum, newVal, testValues, inv)
     for _,tv in ipairs( testValues ) do
@@ -759,7 +761,8 @@ local function checkPoll( lp, tdev )
     alldevs = getKeys( tState.on, alldevs )
     alldevs = getKeys( tState.off, alldevs )
     alldevs = getKeys( tState.inhibit, alldevs )
-    for _,devnum in ipairs( alldevs ) do
+    for _,ds in ipairs( alldevs ) do
+        local devnum = tonumber(ds) or -1
         local ld = luup.devices[devnum]
         if ld ~= nil and luup.device_supports_service("urn:micasaverde-com:serviceId:ZWaveDevice1", devnum) and 
                 not isOnList( tState.pollList, devnum ) then
@@ -776,7 +779,7 @@ local function checkPoll( lp, tdev )
                 end
             end
         else
-            D("checkPoll() skipping %1 (%2), not a ZWaveDevice", devnum, ld.description)
+            D("checkPoll() skipping %1 (%2), not a ZWaveDevice", devnum, (ld or {}).description)
         end
     end
     -- Poll one device per check
@@ -1132,7 +1135,7 @@ local function startTimer( tdev, pdev )
     -- Set up our lists of Triggers and Onlist devices.
     local triggers = split( luup.variable_get( TIMERSID, "Triggers", tdev ) or "" )
     timerState[tostring(tdev)].trigger = map( triggers, 
-        function( ix, v ) local dev,inv = toDevnum(v) return dev, { device=dev, invert=inv, list="trigger" } end )
+        function( ix, v ) local dev,inv = toDevnum(v) return tostring(dev), { device=dev, invert=inv, list="trigger" } end )
     
     -- "On" list
     local l = split( luup.variable_get( TIMERSID, "OnList", tdev ) or "" )
@@ -1140,7 +1143,7 @@ local function startTimer( tdev, pdev )
         loadTriggerMapFromScene( tonumber(l[1]:sub(2)), timerState[tostring(tdev)].on, "on", tdev )
     else
         timerState[tostring(tdev)].on = map( l, 
-            function( ix, v ) local dev = toDevnum(v) return dev, { device=dev, invert=false, list="on" } end )
+            function( ix, v ) local dev = toDevnum(v) return tostring(dev), { device=dev, invert=false, list="on" } end )
     end
     
     -- "Off" list
@@ -1149,13 +1152,13 @@ local function startTimer( tdev, pdev )
         loadTriggerMapFromScene( tonumber(l[1]:sub(2)), timerState[tostring(tdev)].off, "off", tdev )
     else
         timerState[tostring(tdev)].off = map( l, 
-            function( ix, v ) local dev = toDevnum(v) return dev, { device=dev, invert=false, list="off" } end )
+            function( ix, v ) local dev = toDevnum(v) return tostring(dev), { device=dev, invert=false, list="off" } end )
     end
     
     -- Inhibits
     l = split( luup.variable_get( TIMERSID, "InhibitDevices", tdev ) or "" )
     timerState[tostring(tdev)].inhibit = map( l, 
-        function( ix, v ) local dev,inv = toDevnum(v) return dev, { device=dev, invert=inv, list="inhibit" } end )
+        function( ix, v ) local dev,inv = toDevnum(v) return tostring(dev), { device=dev, invert=inv, list="inhibit" } end )
 
     D("startTimer() init of timerState = %1", timerState[tostring(tdev)])
     
@@ -1458,7 +1461,7 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
         -- We respond to edges. The value has to change for us to actually care...
         if oldVal == newVal then return end
 
-        local dinfo = timerState[tostring(tdev)].trigger[dev]
+        local dinfo = timerState[tostring(tdev)].trigger[tostring(dev)]
         if dinfo ~= nil then
             -- Trigger device is changing state.
             
@@ -1512,8 +1515,8 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
             end
         else
             -- It wasn't a trigger device. See if it's on the "on" or "off" lists.
-            dinfo = timerState[tostring(tdev)].on[dev]
-            if dinfo == nil then dinfo = timerState[tostring(tdev)].off[dev] end
+            dinfo = timerState[tostring(tdev)].on[tostring(dev)]
+            if dinfo == nil then dinfo = timerState[tostring(tdev)].off[tostring(dev)] end
             if dinfo ~= nil then 
                 -- Make sure it's our service/variable
                 if sid ~= dinfo.service or var ~= dinfo.variable then return end -- not something we handle
@@ -1557,7 +1560,7 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
                     end
                 end
             else
-                D("timerWatch() ignoring device change, must be inhibit or off list")
+                D("timerWatch() ignoring device change, must be inhibit list")
             end
         end
     end
