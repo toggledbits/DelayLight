@@ -1,8 +1,12 @@
 # Change Log #
 
-## Version 1.7 (develop branch)
+## Version 1.8 (develop branch) ##
 
-## Version 1.6 (released)
+## Version 1.7 (released) ##
+
+* Fix incorrectly deployed D_DelayLight_UI7.json in Vera app marketplace.
+
+## Version 1.6 (released) ##
 
 * Allow inhibitor to be a switch, so VirtualSwitch and other plugins that implement SwitchPower1 can be used.
 * Fix bug in setup/watch of inhibitors.

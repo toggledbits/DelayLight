@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9036
 local _PLUGIN_NAME = "DelayLight"
-local _PLUGIN_VERSION = "1.7develop"
+local _PLUGIN_VERSION = "1.8develop"
 local _PLUGIN_URL = "https://www.toggledbits.com/delaylight"
 local _CONFIGVERSION = 00109
 
@@ -670,7 +670,6 @@ end
 local function isInhibited( tdev )
     D("isInhibited(%1)", tdev) 
     assert( tdev ~= nil )
-    D("timerState = %1", timerState)
     for _,dinfo in pairs(timerState[tostring(tdev)].inhibit) do
         local devnum = dinfo.device
         if luup.devices[devnum] ~= nil and luup.is_ready(devnum) then
