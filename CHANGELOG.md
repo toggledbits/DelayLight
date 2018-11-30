@@ -2,6 +2,9 @@
 
 ## Version 1.8 (develop branch) ##
 
+* Fix SetDebug action parameter use (detected during Reactor 2.0 development).
+* Add Enabled state variable as event-sending, declared variable.
+
 ## Version 1.7 (released) ##
 
 * Fix incorrectly deployed D_DelayLight_UI7.json in Vera app marketplace.
