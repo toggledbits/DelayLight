@@ -721,7 +721,7 @@ end
 -- Active house mode?
 local function isActiveHouseMode( tdev )
     assert(type(tdev) == "number")
-    local mode = luup.attr_get( "Mode", 0 )
+    local mode = tostring( luup.attr_get( "Mode", 0 ) or 1 )
     local activeList,n = split( luup.variable_get( TIMERSID, "HouseModes", tdev ) or "", "," )
     D("isActiveHouseMode() checking current mode %1 against active modes %2", mode, activeList )
     if n == 0 then return true end -- no modes is all modes
