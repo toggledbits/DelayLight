@@ -1,7 +1,8 @@
 # Change Log #
 
-## Version 1.8 (develop branch) ##
+## Version 1.8-stable (stable branch) ##
 
+* Fix type comparison in house mode test (resolves issue #14).
 * Fix SetDebug action parameter use (detected during Reactor 2.0 development).
 * Add Enabled state variable as event-sending, declared variable.
 
