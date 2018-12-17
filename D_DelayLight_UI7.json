@@ -36,7 +36,8 @@
                     "y": "3"
                 }
             ],
-            "Control": [                {
+            "Control": [
+                {
                     "ControlGroup": "1",
                     "ControlType": "variable",
                     "top": "1",
@@ -95,7 +96,7 @@
                     },
                     "Label": {
                         "lang_tag": "tb_delaylight_about",
-                        "text": "DelayLight ver 1.6 &#169; 2016,2017,2018 Patrick H. Rigney, All Rights Reserved.<br/><a href=\"http://forum.micasaverde.com/index.php/topic,60498.0.html\" target=\"_blank\">Forum thread</a> &#149; <a href=\"http://www.toggledbits.com/delaylight\" target=\"_blank\">Documentation and license information</a>."
+                        "text": "DelayLight ver 1.8develop &#169; 2016,2017,2018 Patrick H. Rigney, All Rights Reserved.<br/><a href=\"http://forum.micasaverde.com/index.php/topic,60498.0.html\" target=\"_blank\">Forum thread</a> &#149; <a href=\"http://www.toggledbits.com/delaylight\" target=\"_blank\">Documentation and license information</a>."
                     }
                 }
             ],

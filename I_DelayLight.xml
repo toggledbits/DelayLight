@@ -66,8 +66,8 @@
             <serviceId>urn:toggledbits-com:serviceId:DelayLight</serviceId>
             <name>SetDebug</name>
             <run>
-                local newDebugValue = tonumber(lul_settings.debug or "0", 10)
-                DelayLight.setDebug( debug ~= 0, lul_device )
+                local newDebugValue = tonumber(lul_settings.debug) or 0
+                DelayLight.setDebug( newDebugValue ~= 0, lul_device )
                 return true
             </run>
         </action>

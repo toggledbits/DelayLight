@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9036
 local _PLUGIN_NAME = "DelayLight"
-local _PLUGIN_VERSION = "1.6"
+local _PLUGIN_VERSION = "1.8develop"
 local _PLUGIN_URL = "https://www.toggledbits.com/delaylight"
 local _CONFIGVERSION = 00109
 
@@ -670,7 +670,6 @@ end
 local function isInhibited( tdev )
     D("isInhibited(%1)", tdev) 
     assert( tdev ~= nil )
-    D("timerState = %1", timerState)
     for _,dinfo in pairs(timerState[tostring(tdev)].inhibit) do
         local devnum = dinfo.device
         if luup.devices[devnum] ~= nil and luup.is_ready(devnum) then
@@ -722,7 +721,7 @@ end
 -- Active house mode?
 local function isActiveHouseMode( tdev )
     assert(type(tdev) == "number")
-    local mode = luup.attr_get( "Mode", 0 )
+    local mode = tostring( luup.attr_get( "Mode", 0 ) or 1 )
     local activeList,n = split( luup.variable_get( TIMERSID, "HouseModes", tdev ) or "", "," )
     D("isActiveHouseMode() checking current mode %1 against active modes %2", mode, activeList )
     if n == 0 then return true end -- no modes is all modes
