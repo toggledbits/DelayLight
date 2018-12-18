@@ -37,6 +37,7 @@ local pluginDevice = 0
 local timerState = {}
 local sceneData = {}
 local tickTasks = {}
+local pollList = {}
 local sceneWaiting = {}
 local watchData = {}
 local isALTUI = false
@@ -187,7 +188,6 @@ local function clearTimerState( tdev )
     D("clearTimerState(%1)", tdev)
     if timerState == nil then timerState = {} end
     timerState[tostring(tdev)] = {
-        pollList={},
         trigger={},
         on={},
         off={},
@@ -330,7 +330,7 @@ local function isSwitchType( dev, obj, vtDev )
     if obj.category_num == 2 or obj.category_num == 3 then return true end
     -- VirtualSwitch is special
     if obj.device_type == "urn:schemas-upnp-org:device:VSwitch:1" then return true end
-    -- Devices that implement dimmer behavior may be considered dimmers
+    -- Devices that implement dimmer behavior may be considered switches
     if luup.device_supports_service(DIMMER_SID, dev) then return true end
     -- Finally, if it implements switch behavior, treat as switch
     return luup.device_supports_service(SWITCH_SID, dev)
@@ -383,6 +383,63 @@ local function scheduleDelay( delay, tdev, ... )
     scheduleTick( delay+os.time(), tdev, ... )
 end
 
+local function isBatteryDevice( dev )
+    if luup.devices[dev] == nil then
+        return false
+    elseif ( luup.variable_get( "urn:micasaverde-com:serviceId:ZWaveDevice1", "WakeupInterval", dev ) or "" ) ~= "" then
+        return true
+    elseif luup.devices[dev].device_num_parent <= 1 and 
+        ( luup.variable_get( "urn:micasaverde-com:serviceId:ZWaveDevice1", "WakeupInterval", luup.devices[dev].device_num_parent ) or "" ) ~= "" then
+        return true
+    end
+    return false
+end
+
+-- Add device to poll list
+local function addPollDevice( dev, tdev )
+    D("addPollDevice(%1,%2)", dev, tdev)
+    if luup.devices[dev] == nil then
+        D("addPollDevice() skipping %1, doesn't exist", dev)
+    elseif not luup.device_supports_service("urn:micasaverde-com:serviceId:ZWaveDevice1", dev) then
+        D("addPollDevice() skipping %1 (#%2), not a Z-Wave device", luup.devices[dev].description, dev)
+    elseif isBatteryDevice( dev ) then
+        D("addPollDevice() skipping %1 (#%2), no force-polling of battery-operated devices", luup.devices[dev].description, dev)
+    else
+        local adev = luup.devices[dev].device_num_parent <= 1 and dev or luup.devices[dev].device_num_parent
+        if pollList[tostring(adev)] == nil then
+            D("addPollDevice() adding %1 (#%2) to poll list for %3 (#%4)", luup.devices[adev].description, adev, luup.devices[dev].description, dev)
+            local pp = getVarNumeric( "PollSettings", 0, adev, "urn:micasaverde-com:serviceId:ZWaveDevice1" )
+            if pp < 60 then pp = 60 end
+            local dp = getVarNumeric( "LastPollSuccess", 0, adev, "urn:micasaverde-com:serviceId:ZWaveNetwork1" )
+            pollList[tostring(adev)] = { dev=adev, due=0, interval=pp, last=dp }
+        end
+    end
+end
+
+-- Check polling time for all devices
+local function checkPoll( pdev )
+    D("checkPoll(%1)", pdev)
+    local now = os.time()
+    local due = {}
+    for _,ds in pairs( pollList ) do
+        if ds.due <= now and luup.devices[ds.dev] ~= nil and luup.is_ready(ds.dev) then
+            table.insert( due, ds )
+        end
+    end
+    -- Poll one device per check
+    D("checkPoll() poll list contains %1 devices", #due )
+    table.sort( due, function( a, b ) return a.due < b.due end )
+    if #due > 0 then
+        local ds = table.remove( due, 1 )
+        L("Poll list contains %1 devices, oldest is %2 (#%3); polling it.",
+            #due+1, luup.devices[ds.dev].description, ds.dev)
+        luup.call_action( "urn:micasaverde-com:serviceId:HaDevice1", "Poll", {}, ds.dev)
+        ds.last = now
+        ds.due = now + ds.interval
+    end
+    return #due > 0 -- true if there are still items on pollList
+end
+
 -- Watch a device/service/variable. We keep track of all the watches, and dispatch
 -- them to the interested devices, because watch callbacks always get the plugin
 -- device in luup.device--there is no connection between a child that calls
@@ -399,6 +456,9 @@ local function watchVariable( sid, var, target, tdev )
         luup.variable_watch( "delayLightWatch", sid, var, target )
     else
         D("watchVariable() already watch in place for %2 on %1", key, tdev)
+    end
+    if getVarNumeric( "ForcePoll", 0, tdev, TIMERSID ) > 0 then
+        addPollDevice( target, tdev )
     end
 end
 
@@ -518,26 +578,25 @@ local function deviceOnOff( targetDevice, state, vtDev )
             local desc = luup.devices[targetId].description
             -- ??? need to resolve the real utility of this (does it have any?)
             local oldState = tonumber(luup.variable_get( SWITCH_SID, "Status", targetId ) or "0", 10)
-            local targetVal = iif( state, 1, 0 )
-            if luup.devices[targetId].device_type == "urn:schemas-upnp-org:device:VSwitch:1" then
-                -- VirtualSwitch plugin requires newTargetValue parameter as string, which isn't
-                -- strict UPnP, so handle separately.
-                D("deviceOnOff() handling %1 (%2) as VSwitch1 exception, setting target=%3", targetId, desc, state)
-                local rc, rs = luup.call_action("urn:upnp-org:serviceId:VSwitch1", "SetTarget",
-                    { newTargetValue=tostring(targetVal) }, targetId)
-                D("deviceOnOff() action SetTarget for device %1 returned %2 %3", targetId, rc, rs)
-            elseif lvl ~= nil and luup.device_supports_service(DIMMER_SID, targetId) then
+            local targetVal = tostring( state and 1 or 0 )
+            if lvl ~= nil and isDimmerType( targetId, nil, vtDev) then
                 D("deviceOnOff() handling %1 (%2) as Dimming1, setting target level=%3", targetId, desc, lvl)
                 local rc, rs = luup.call_action(DIMMER_SID, "SetLoadLevelTarget",
-                    { newLoadlevelTarget=lvl }, targetId) -- note case inconsistency in argument name
+                    { newLoadlevelTarget=tostring(lvl) }, targetId) -- note case inconsistency in argument name
                 D("deviceOnOff() action SetLoadLevelTarget for device %1 returned %2 %3", targetId, rc, rs)
-            elseif luup.device_supports_service( SWITCH_SID , targetId ) then
+            elseif luup.devices[targetId].device_type == "urn:schemas-upnp-org:device:VSwitch:1" then
+                -- VirtualSwitch plugin has its own, seems to work more consistently than its attempt at SwitchPower1
+                D("deviceOnOff() handling %1 (%2) as VSwitch1 exception, setting target=%3", targetId, desc, state)
+                local rc, rs = luup.call_action("urn:upnp-org:serviceId:VSwitch1", "SetTarget",
+                    { newTargetValue=targetVal }, targetId)
+                D("deviceOnOff() action SetTarget for device %1 returned %2 %3", targetId, rc, rs)
+            elseif isSwitchType( targetId, nil, vtDev ) then
                 D("deviceOnOff() handling %1 (%2) as SwitchPower1, setting target=%3", targetId, desc, state)
                 local rc, rs = luup.call_action("urn:upnp-org:serviceId:SwitchPower1", "SetTarget",
                     { newTargetValue=targetVal }, targetId)
                 D("deviceOnOff() action SetTarget for device %1 returned %2 %3", targetId, rc, rs)
             elseif luup.devices[targetId].device_type == MYTYPE then
-                -- Yes, we can control another delay light!
+                -- Yes, we can control another DelayLightTimer!
                 local action = iif( state, "Trigger", "Reset" )
                 D("deviceOnOff() handling %1 (%2) as DelayLight, action %3", targetId, desc, action)
                 local rc, rs = luup.call_action( TIMERSID, action, {}, targetId )
@@ -755,47 +814,6 @@ local function getKeys( m, r )
         end
     end
     return r
-end
-
--- Check polling time for all devices
-local function checkPoll( lp, tdev )
-    L("Timer %1 (%2) polling devices...", tdev, luup.devices[tdev].description)
-    local now = os.time()
-    local tState = timerState[tostring(tdev)]
-    local alldevs = getKeys( tState.trigger )
-    alldevs = getKeys( tState.on, alldevs )
-    alldevs = getKeys( tState.off, alldevs )
-    alldevs = getKeys( tState.inhibit, alldevs )
-    for _,ds in ipairs( alldevs ) do
-        local devnum = tonumber(ds) or -1
-        local ld = luup.devices[devnum]
-        if ld ~= nil and luup.device_supports_service("urn:micasaverde-com:serviceId:ZWaveDevice1", devnum) and 
-                not isOnList( tState.pollList, devnum ) then
-            local pp = getVarNumeric( "PollSettings", lp, devnum, "urn:micasaverde-com:serviceId:ZWaveDevice1" )
-            if pp ~= 0  then
-                local dp = getVarNumeric( "LastPollSuccess", 0, devnum, "urn:micasaverde-com:serviceId:ZWaveNetwork1" )
-                if (now - dp) > pp then
-                    if luup.variable_get( "urn:micasaverde-com:serviceId:ZWaveDevice1", "WakeupInterval", devnum ) ~= nil then
-                        D("checkPoll() skipping forced poll on battery-operated device %1 (%2)", devnum, ld.description)
-                    else
-                        D("checkPoll() queueing poll on device %1 (%2), last %3 (%4 ago)", devnum, ld.description, dp, now-dp)
-                        table.insert(tState.pollList, devnum)
-                    end
-                end
-            end
-        else
-            D("checkPoll() skipping %1 (%2), not a ZWaveDevice", devnum, (ld or {}).description)
-        end
-    end
-    -- Poll one device per check
-    D("checkPoll() poll list now contains %1 devices", #timerState[tostring(tdev)].pollList )
-    if #timerState[tostring(tdev)].pollList > 0 then
-        local devnum = table.remove( tState.pollList, 1 )
-        D("checkPoll() forcing poll on overdue device %1 (%2)", devnum, luup.devices[devnum].description)
-        luup.call_action( "urn:micasaverde-com:serviceId:HaDevice1", "Poll", {}, devnum)
-        luup.variable_set( TIMERSID, "LastPoll", now, tdev )
-    end
-    return #tState.pollList > 0 -- true if there are still items on pollList
 end
 
 -- Return the plugin version string
@@ -1070,7 +1088,7 @@ local function trigger( state, tdev )
             luup.variable_set( TIMERSID, "OffTime", newTime, tdev )
             offTime = newTime
         end
-        delay = os.time() - offTime
+        delay = offTime - os.time()
         addEvent{dev=tdev,event="retrigger",mode=status,delay=delay,offTime=offTime}
         scheduleDelay( delay, tdev )
     end
@@ -1078,7 +1096,7 @@ end
 
 local function resetTimer( tdev )
     D("resetTimer(%1)", tdev)
-    addEvent{ event="timerreset", dev=tdev }
+    addEvent{ event="resettimer", dev=tdev }
     luup.variable_set( TIMERSID, "Status", STATE_IDLE, tdev )
     luup.variable_set( TIMERSID, "Timing", 0, tdev )
     luup.variable_set( TIMERSID, "OffTime", 0, tdev )
@@ -1088,7 +1106,7 @@ end
 
 local function reset( force, tdev )
     D("reset(%1,%2)", force, tdev)
-    addEvent{ event="resetaction", dev=tdev, force=force }
+    addEvent{ event="reset", dev=tdev, force=force }
     resetTimer( tdev )
     doLoadsOff( tdev )
     return true
@@ -1404,14 +1422,6 @@ timerTick = function (tdev) -- forward-declared
                 break -- one at a time
             end
         end
-
-        local lp = getVarNumeric( "ForcePoll", 0, tdev, TIMERSID )
-        if lp > 0 then
-            checkPoll( lp, tdev )
-            if nextTick == nil or nextTick > lp then
-                nextTick = lp
-            end
-        end
     end
 
     if nextTick == nil then
@@ -1469,6 +1479,16 @@ function tick(p)
         end
     end
 
+    -- Check polling
+    if nextTick == nil or ( nextTick - now ) >= 5 then
+        local success, p2 = pcall( checkPoll, pluginDevice )
+        if success then
+            if p2 then nextTick = now + 5 end
+        else
+            L({level=2,msg="Poll failed: %1"}, p2)
+        end
+    end
+    
     -- Figure out next master tick: soonest timer task tick, or 60 seconds
     local delay = 60
     if nextTick ~= nil then
