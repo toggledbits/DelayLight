@@ -2,6 +2,9 @@
 
 ## Version 1.8 (develop branch) ##
 
+* Fix a bug evaluating the status of dimmers that causes some devices (notably Monoprice switches, which expose Dimming1 semantics but don't actually dim) to be seen as "on" when they are not (Github issue #14).
+* Wait for Z-Wave ready before starting timer and allowing startup status check on any device.
+* Canonicalize type for house mode test.
 * Fix SetDebug action parameter use (detected during Reactor 2.0 development).
 * Add Enabled state variable as event-sending, declared variable.
 * Additional event logging for simpler diagnostics.
