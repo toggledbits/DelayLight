@@ -4,6 +4,7 @@
 
 * Fix SetDebug action parameter use (detected during Reactor 2.0 development).
 * Add Enabled state variable as event-sending, declared variable.
+* Additional event logging for simpler diagnostics.
 
 ## Version 1.7 (released) ##
 
