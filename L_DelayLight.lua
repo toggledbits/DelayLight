@@ -415,9 +415,17 @@ local function watchMap( m, tdev )
             elseif isDimmerType( nn, nil, tdev ) then -- dimmer/light
                 D("watchTriggers(): watching %1 (%2) as dimmer", nn, ix.devicename)
                 watchVariable( DIMMER_SID, "LoadLevelStatus", nn, tdev)
+                watchVariable( SWITCH_SID, "Status", nn, tdev )
+                --[[
                 ix.service = DIMMER_SID
                 ix.variable = "LoadLevelStatus"
                 ix.valueOn = { { comparison=">", value=0 } }
+                ix.watched = true
+                --]]
+                -- Experiment: watch as switch
+                ix.service = SWITCH_SID
+                ix.variable = "Status"
+                ix.valueOn = "1"
                 ix.watched = true
             elseif isSwitchType( nn, nil, tdev ) then -- light or switch
                 D("watchTriggers(): watching %1 (%2) as switch", nn, ix.devicename)
