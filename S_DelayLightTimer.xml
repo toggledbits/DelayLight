@@ -6,6 +6,12 @@
     </specVersion>
     <serviceStateTable>
         <stateVariable sendEvents="yes">
+            <name>Enabled</name>
+            <dataType>boolean</dataType>
+            <defaultValue>1</defaultValue>
+            <shortCode>enabled</shortCode>
+        </stateVariable>
+        <stateVariable sendEvents="yes">
             <name>Status</name>
             <dataType>string</dataType>
             <defaultValue>idle</defaultValue>

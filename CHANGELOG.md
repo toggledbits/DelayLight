@@ -1,6 +1,19 @@
 # Change Log #
 
-## Version 1.6 (released)
+## Version 1.8 (released) ##
+
+* Fix a bug evaluating the status of dimmers that causes some devices (notably Monoprice switches, which expose Dimming1 semantics but don't actually dim) to be seen as "on" when they are not (Github issue #14).
+* Wait for Z-Wave ready before starting timer and allowing startup status check on any device.
+* Canonicalize type for house mode test.
+* Fix SetDebug action parameter use (detected during Reactor 2.0 development).
+* Add Enabled state variable as event-sending, declared variable.
+* Additional event logging for simpler diagnostics.
+
+## Version 1.7 (released) ##
+
+* Fix incorrectly deployed D_DelayLight_UI7.json in Vera app marketplace.
+
+## Version 1.6 (released) ##
 
 * Allow inhibitor to be a switch, so VirtualSwitch and other plugins that implement SwitchPower1 can be used.
 * Fix bug in setup/watch of inhibitors.
