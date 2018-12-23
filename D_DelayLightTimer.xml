@@ -26,8 +26,6 @@
             <SCPDURL>S_HaDevice1.xml</SCPDURL>
           </service>
         </serviceList>
-        <implementationList>
-          <implementationFile>I_DelayLight.xml</implementationFile>
-        </implementationList>
+        <implementationList/>
     </device>
 </root>
