@@ -1,6 +1,6 @@
 # Change Log #
 
-## Version 1.8-stable (stable branch) ##
+## Version 1.8 (released) ##
 
 * Fix a bug evaluating the status of dimmers that causes some devices (notably Monoprice switches, which expose Dimming1 semantics but don't actually dim) to be seen as "on" when they are not (Github issue #14).
 * Wait for Z-Wave ready before starting timer and allowing startup status check on any device.
