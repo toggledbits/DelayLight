@@ -1,6 +1,6 @@
 --[[
     L_DelayLight.lua - Core module for DelayLight
-    Copyright 2017,2018 Patrick H. Rigney, All Rights Reserved.
+    Copyright 2017,2018,2019 Patrick H. Rigney, All Rights Reserved.
     This file is part of DelayLight. For license information, see LICENSE at https://github.com/toggledbits/DelayLight
 --]]
 --luacheck: std lua51,module,read globals luup,ignore 542 611 612 614 111/_,no max line length
@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9036
 local _PLUGIN_NAME = "DelayLight"
-local _PLUGIN_VERSION = "1.8"
+local _PLUGIN_VERSION = "1.9develop-19091"
 local _PLUGIN_URL = "https://www.toggledbits.com/delaylight"
 local _CONFIGVERSION = 00110
 
@@ -446,16 +446,13 @@ end
 -- variable_watch and the later callback, so we have to create it.
 local function watchVariable( sid, var, target, tdev )
     D("watchVariable(%1,%2,%3,%4)", sid, var, target, tdev)
-    local key = string.format("%d:%s/%s", target, sid, var or "*")
+    local key = string.format("%d/%s/%s", target, sid, var or "*")
     if watchData[key] == nil then
         watchData[key] = {}
-    end
-    local pf = watchData[key][tostring(tdev)]
-    if pf == nil then
-        watchData[key][tostring(tdev)] = true
         luup.variable_watch( "delayLightWatch", sid, var, target )
-    else
-        D("watchVariable() already watch in place for %2 on %1", key, tdev)
+    end
+    if watchData[key][tostring(tdev)] == nil then
+        watchData[key][tostring(tdev)] = true
     end
     if getVarNumeric( "ForcePoll", 0, tdev, TIMERSID ) > 0 then
         addPollDevice( target, tdev )
@@ -1636,10 +1633,10 @@ function watch( dev, sid, var, oldVal, newVal )
     D("watch(%1,%2,%3,%4,%5) luup.device(tdev)=%6", dev, sid, var, oldVal, newVal, luup.device)
     assert(var ~= nil) -- nil if service or device watch (can happen on openLuup)
 
-    local key = string.format("%d:%s/%s", dev, sid, var)
+    local key = string.format("%d/%s/%s", dev, sid, var)
     if watchData[key] then
         for t in pairs(watchData[key]) do
-            local tdev = tonumber(t, 10)
+            local tdev = tonumber(t)
             if tdev ~= nil then
                 D("watch() dispatching to %1 (%2)", tdev, luup.devices[tdev].description)
                 -- addEvent{dev=tdev,event="watch",watchdev=dev,service=sid,variable=var,old=oldVal,new=newVal}
