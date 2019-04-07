@@ -1,6 +1,6 @@
 # Change Log #
 
-## Version 1.9 (development) 
+## Version 1.9 (released) 
 
 * Upgrade detection of AltUI so we don't falsely detect when bridged (on "real" device triggers AltUI feature registration).
 * Fix issue that may cause excess calls to `luup.variable_watch()` (i.e. called for dev/svc/var already watched)--harmless but inefficient.

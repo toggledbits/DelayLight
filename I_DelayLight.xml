@@ -1,75 +1,75 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <implementation>
-    <functions>
-        -- -------------------------------------------------------------------------------------------------------------------------
-        -- DelayLight
-        -- Copyright 2017,2018 Patrick H. Rigney, All Rights Reserved.
-        -- This file is part of DelayLight. For license info, see LICENSE at https://github.com/toggledbits/DelayLight
-        -- -------------------------------------------------------------------------------------------------------------------------
-        function startupDelayLight(devNum)
-            luup.log("DelayLight STARTUP!")
-            DelayLight = require("L_DelayLight")
-            delayLightTick = DelayLight.tick
-            delayLightWatch = DelayLight.watch
-            delayLightRequestHandler = DelayLight.request
-            luup.register_handler("delayLightRequestHandler", "DelayLight")
-            return DelayLight.startPlugin(devNum)
-        end
-    </functions>
-    <startup>startupDelayLight</startup>
-    <actionList>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:DelayLightTimer</serviceId>
-            <name>SetEnabled</name>
-            <run>
-                DelayLight.setEnabled( lul_settings.newEnabledValue, lul_device )
-                return true
-            </run>
-        </action>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:DelayLightTimer</serviceId>
-            <name>Reset</name>
-            <run>
-                DelayLight.actionReset( true, lul_device )
-                return true
-            </run>
-        </action>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:DelayLightTimer</serviceId>
-            <name>Trigger</name>
-            <run>
-                DelayLight.actionTrigger( DelayLight.STATE_AUTO, lul_device )
-                return true
-            </run>
-        </action>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:DelayLight</serviceId>
-            <name>AddTimer</name>
-            <job>
-                DelayLight.addTimer( lul_device )
-                return 4,0
-            </job>
-        </action>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:DelayLight</serviceId>
-            <name>GetPluginVersion</name>
-            <run>
-                -- Ugly hack. Luup seems to only be able to return values from related state variables (see S_), so use a temp
-                -- one to store the result we want to pass back. Blech. C'mon guys. Amateur hour. Add an extra return argument
-                -- for a table of return values or something, please?
-                local vs, vn = DelayLight.getPluginVersion()
-                luup.variable_set("urn:toggledbits-com:serviceId:DelayLight", "TempStorage", vs, lul_device)
-                return true
-            </run>
-        </action>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:DelayLight</serviceId>
-            <name>SetDebug</name>
-            <run>
-                local newDebugValue = tonumber(lul_settings.debug) or 0
-                DelayLight.setDebug( newDebugValue ~= 0, lul_device )
-                return true
-            </run>
-        </action>
-    </actionList>
+	<functions>
+		-- -------------------------------------------------------------------------------------------------------------------------
+		-- DelayLight
+		-- Copyright 2017,2018 Patrick H. Rigney, All Rights Reserved.
+		-- This file is part of DelayLight. For license info, see LICENSE at https://github.com/toggledbits/DelayLight
+		-- -------------------------------------------------------------------------------------------------------------------------
+		function startupDelayLight(devNum)
+			luup.log("DelayLight STARTUP!")
+			DelayLight = require("L_DelayLight")
+			delayLightTick = DelayLight.tick
+			delayLightWatch = DelayLight.watch
+			delayLightRequestHandler = DelayLight.request
+			luup.register_handler("delayLightRequestHandler", "DelayLight")
+			return DelayLight.startPlugin(devNum)
+		end
+	</functions>
+	<startup>startupDelayLight</startup>
+	<actionList>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:DelayLightTimer</serviceId>
+			<name>SetEnabled</name>
+			<run>
+				DelayLight.setEnabled( lul_settings.newEnabledValue, lul_device )
+				return true
+			</run>
+		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:DelayLightTimer</serviceId>
+			<name>Reset</name>
+			<run>
+				DelayLight.actionReset( true, lul_device )
+				return true
+			</run>
+		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:DelayLightTimer</serviceId>
+			<name>Trigger</name>
+			<run>
+				DelayLight.actionTrigger( DelayLight.STATE_AUTO, lul_device )
+				return true
+			</run>
+		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:DelayLight</serviceId>
+			<name>AddTimer</name>
+			<job>
+				DelayLight.addTimer( lul_device )
+				return 4,0
+			</job>
+		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:DelayLight</serviceId>
+			<name>GetPluginVersion</name>
+			<run>
+				-- Ugly hack. Luup seems to only be able to return values from related state variables (see S_), so use a temp
+				-- one to store the result we want to pass back. Blech. C'mon guys. Amateur hour. Add an extra return argument
+				-- for a table of return values or something, please?
+				local vs, vn = DelayLight.getPluginVersion()
+				luup.variable_set("urn:toggledbits-com:serviceId:DelayLight", "TempStorage", vs, lul_device)
+				return true
+			</run>
+		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:DelayLight</serviceId>
+			<name>SetDebug</name>
+			<run>
+				local newDebugValue = tonumber(lul_settings.debug) or 0
+				DelayLight.setDebug( newDebugValue ~= 0, lul_device )
+				return true
+			</run>
+		</action>
+	</actionList>
 </implementation>
