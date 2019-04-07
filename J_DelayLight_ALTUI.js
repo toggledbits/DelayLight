@@ -12,21 +12,21 @@
 
 var DelayLight_ALTUI = ( function( window, undefined ) {
 
-    function _getStyle() {
-        var style = "";
-        return style;
-    }
-    
-    function _draw( device ) {
-            var html ="";
-            var message = MultiBox.getStatus( device, "urn:toggledbits-com:serviceId:DelayLight", "Message");
-            html += '<div>' + message + '</div>';
-            return html;
-    }
-    
-    return {
-        /* true exports */
-        deviceDraw: _draw,
-        getStyle: _getStyle
-    };
+	function _getStyle() {
+		var style = "";
+		return style;
+	}
+	
+	function _draw( device ) {
+			var html ="";
+			var message = MultiBox.getStatus( device, "urn:toggledbits-com:serviceId:DelayLight", "Message");
+			html += '<div>' + message + '</div>';
+			return html;
+	}
+	
+	return {
+		/* true exports */
+		deviceDraw: _draw,
+		getStyle: _getStyle
+	};
 })( window );

@@ -19,7 +19,7 @@
 			},
 			"Position": "0",
 			"TabType": "flash",
-            "TopNavigationTab": 1,
+			"TopNavigationTab": 1,
 			"ControlGroup": [{
 					"id": "1",
 					"scenegroup": "1"
@@ -106,17 +106,17 @@
 					},
 					"ControlCode": "trigger"
 				},
-                {
+				{
 					"ControlGroup": "1",
 					"ControlType": "multi_state_button",
 					"top": "0",
 					"left": "0",
-                    "Display": {
-                        "Top": 30,
-                        "Left": 255,
-                        "Width": 70,
-                        "Height": 24
-                    },
+					"Display": {
+						"Top": 30,
+						"Left": 255,
+						"Width": 70,
+						"Height": 24
+					},
 					"states": [{
 							"Label": {
 								"lang_tag": "tb_enabled",
@@ -183,7 +183,7 @@
 			},
 			"Position": "1",
 			"TabType": "javascript",
-            "TopNavigationTab": 1,
+			"TopNavigationTab": 1,
 			"ScriptName": "J_DelayLightTimer_UI7.js",
 			"Function": "DelayLightTimer.doSettings"
 		},
@@ -229,124 +229,124 @@
 		}
 	],
 	"eventList2": [
-        {
-            "id": 1,
-            "label": {
-                "lang_tag": "tb_mode_changes",
-                "text": "Mode Changes"
-            },
-            "serviceId": "urn:toggledbits-com:serviceId:DelayLightTimer",
-            "argumentList": [{
-                "id": 1,
-                "name": "Status",
-                "comparisson": "=",
-                "dataType": "string",
-                "defaultValue": "",
-                "allowedValueList": [{
-                        "idle": "idle",
-                        "HumanFriendlyText": {
-                            "lang_tag": "tb_dl_idle",
-                            "text": "_DEVICE_NAME_ mode is idle"
-                        }
-                    },
-                    {
-                        "Manual": "man",
-                        "HumanFriendlyText": {
-                            "lang_tag": "tb_dl_man",
-                            "text": "_DEVICE_NAME_ mode in manual timing"
-                        }
-                    },
-                    {
-                        "Automatic": "auto",
-                        "HumanFriendlyText": {
-                            "lang_tag": "tb_dl_auto",
-                            "text": "_DEVICE_NAME_ mode in automatic timing"
-                        }
-                    }
-                ],
-                "prefix": {
-                    "lang_tag": "mode",
-                    "text": "Mode"
-                },
-                "suffix": {}
-            }]
-        },
-        {
-            "id": 2,
-            "label": {
-                "lang_tag": "tb_runstate_changes",
-                "text": "Timing State Changes"
-            },
-            "serviceId": "urn:toggledbits-com:serviceId:DelayLightTimer",
-            "argumentList": [{
-                "id": 1,
-                "name": "Timing",
-                "comparisson": "=",
-                "dataType": "string",
-                "defaultValue": "",
-                "allowedValueList": [{
-                        "not timing": "0",
-                        "HumanFriendlyText": {
-                            "lang_tag": "tb_st_notiming",
-                            "text": "_DEVICE_NAME_ stops timing"
-                        }
-                    },
-                    {
-                        "timing": "1",
-                        "HumanFriendlyText": {
-                            "lang_tag": "tb_st_timing",
-                            "text": "_DEVICE_NAME_ starts off-delay timing"
-                        }
-                    },
-                    {
-                        "timing": "2",
-                        "HumanFriendlyText": {
-                            "lang_tag": "tb_st_timing",
-                            "text": "_DEVICE_NAME_ starts on-delay timing"
-                        }
-                    }                ],
-                "prefix": {
-                    "lang_tag": "tb_state",
-                    "text": "State"
-                },
-                "suffix": {}
-            }]
-        },
-        {
-            "id": 3,
-            "label": {
-                "lang_tag": "tb_opstate_changes",
-                "text": "Enabled State Changes"
-            },
-            "serviceId": "urn:toggledbits-com:serviceId:DelayLightTimer",
-            "argumentList": [{
-                "id": 1,
-                "name": "Enabled",
-                "comparisson": "=",
-                "dataType": "string",
-                "defaultValue": "1",
-                "allowedValueList": [{
-                        "enabled": "1",
-                        "HumanFriendlyText": {
-                            "lang_tag": "tb_ost_enabled",
-                            "text": "_DEVICE_NAME_ is enabled"
-                        }
-                    },
-                    {
-                        "disabled": "0",
-                        "HumanFriendlyText": {
-                            "lang_tag": "tb_ost_disabled",
-                            "text": "_DEVICE_NAME_ is disabled"
-                        }
-                    }
-                ],
-                "prefix": {
-                    "lang_tag": "tb_state",
-                    "text": "State"
-                },
-                "suffix": {}
-            }]
-        }
-    ],
+		{
+			"id": 1,
+			"label": {
+				"lang_tag": "tb_mode_changes",
+				"text": "Mode Changes"
+			},
+			"serviceId": "urn:toggledbits-com:serviceId:DelayLightTimer",
+			"argumentList": [{
+				"id": 1,
+				"name": "Status",
+				"comparisson": "=",
+				"dataType": "string",
+				"defaultValue": "",
+				"allowedValueList": [{
+						"idle": "idle",
+						"HumanFriendlyText": {
+							"lang_tag": "tb_dl_idle",
+							"text": "_DEVICE_NAME_ mode is idle"
+						}
+					},
+					{
+						"Manual": "man",
+						"HumanFriendlyText": {
+							"lang_tag": "tb_dl_man",
+							"text": "_DEVICE_NAME_ mode in manual timing"
+						}
+					},
+					{
+						"Automatic": "auto",
+						"HumanFriendlyText": {
+							"lang_tag": "tb_dl_auto",
+							"text": "_DEVICE_NAME_ mode in automatic timing"
+						}
+					}
+				],
+				"prefix": {
+					"lang_tag": "mode",
+					"text": "Mode"
+				},
+				"suffix": {}
+			}]
+		},
+		{
+			"id": 2,
+			"label": {
+				"lang_tag": "tb_runstate_changes",
+				"text": "Timing State Changes"
+			},
+			"serviceId": "urn:toggledbits-com:serviceId:DelayLightTimer",
+			"argumentList": [{
+				"id": 1,
+				"name": "Timing",
+				"comparisson": "=",
+				"dataType": "string",
+				"defaultValue": "",
+				"allowedValueList": [{
+						"not timing": "0",
+						"HumanFriendlyText": {
+							"lang_tag": "tb_st_notiming",
+							"text": "_DEVICE_NAME_ stops timing"
+						}
+					},
+					{
+						"timing": "1",
+						"HumanFriendlyText": {
+							"lang_tag": "tb_st_timing",
+							"text": "_DEVICE_NAME_ starts off-delay timing"
+						}
+					},
+					{
+						"timing": "2",
+						"HumanFriendlyText": {
+							"lang_tag": "tb_st_timing",
+							"text": "_DEVICE_NAME_ starts on-delay timing"
+						}
+					}                ],
+				"prefix": {
+					"lang_tag": "tb_state",
+					"text": "State"
+				},
+				"suffix": {}
+			}]
+		},
+		{
+			"id": 3,
+			"label": {
+				"lang_tag": "tb_opstate_changes",
+				"text": "Enabled State Changes"
+			},
+			"serviceId": "urn:toggledbits-com:serviceId:DelayLightTimer",
+			"argumentList": [{
+				"id": 1,
+				"name": "Enabled",
+				"comparisson": "=",
+				"dataType": "string",
+				"defaultValue": "1",
+				"allowedValueList": [{
+						"enabled": "1",
+						"HumanFriendlyText": {
+							"lang_tag": "tb_ost_enabled",
+							"text": "_DEVICE_NAME_ is enabled"
+						}
+					},
+					{
+						"disabled": "0",
+						"HumanFriendlyText": {
+							"lang_tag": "tb_ost_disabled",
+							"text": "_DEVICE_NAME_ is disabled"
+						}
+					}
+				],
+				"prefix": {
+					"lang_tag": "tb_state",
+					"text": "State"
+				},
+				"suffix": {}
+			}]
+		}
+	],
 	"device_type": "urn:schemas-toggledbits-com:device:DelayLightTimer:1"
 }
