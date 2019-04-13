@@ -1,12 +1,12 @@
 //# sourceURL=J_DelayLightTimer_ALTUI.js
-/** 
+/**
  * J_DelayLightTimer_ALTUI.js
  * Special presentation for ALTUI for DelayLightTimer
  *
- * Copyright 2016,2017 Patrick H. Rigney, All Rights Reserved.
+ * Copyright 2016,2017,2018 Patrick H. Rigney, All Rights Reserved.
  * This file is part of DelayLight. For license information, see LICENSE at https://github.com/toggledbits/DelayLight
  */
-/* globals MultiBox,ALTUI_PluginDisplays,_T */
+/* globals window,MultiBox,ALTUI_PluginDisplays,_T */
 
 "use strict";
 
@@ -17,7 +17,7 @@ var DelayLightTimer_ALTUI = ( function( window, undefined ) {
 		style += ".dXelaylight-cpbutton { height: 24px; }";
 		return style;
 	}
-	
+
 	function _draw( device ) {
 			var html ="";
 			var message = MultiBox.getStatus( device, "urn:toggledbits-com:serviceId:DelayLightTimer", "Message");
@@ -33,11 +33,11 @@ var DelayLightTimer_ALTUI = ( function( window, undefined ) {
 			html += '</script>';
 			return html;
 	}
-	
+
 	function _deviceAction( altuiid, action ) {
 		MultiBox.runActionByAltuiID( altuiid, "urn:toggledbits-com:serviceId:DelayLightTimer", action, {} );
 	}
-	
+
 	return {
 		/* convenience exports */
 		_deviceAction: _deviceAction,

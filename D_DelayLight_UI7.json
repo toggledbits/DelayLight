@@ -1,4 +1,5 @@
 {
+	"_comment": ["D_DelayLight_UI7.json"],
 	"default_icon": "https://www.toggledbits.com/assets/delaylight/delaylight-default.png",
 	"state_icons": [],
 	"x": "2",
@@ -36,8 +37,7 @@
 					"y": "3"
 				}
 			],
-			"Control": [
-				{
+			"Control": [{
 					"ControlGroup": "1",
 					"ControlType": "variable",
 					"top": "1",
@@ -96,25 +96,23 @@
 					},
 					"Label": {
 						"lang_tag": "tb_delaylight_about",
-						"text": "DelayLight ver 1.9 &#169; 2016,2017,2018 Patrick H. Rigney, All Rights Reserved.<br/><a href=\"http://forum.micasaverde.com/index.php/topic,60498.0.html\" target=\"_blank\">Forum thread</a> &#149; <a href=\"http://www.toggledbits.com/delaylight\" target=\"_blank\">Documentation and license information</a>."
+						"text": "DelayLight ver 1.10 &#169; 2016,2017,2018 Patrick H. Rigney, All Rights Reserved.<br/><a href=\"http://forum.micasaverde.com/index.php/topic,60498.0.html\" target=\"_blank\">Forum thread</a> &#149; <a href=\"http://www.toggledbits.com/delaylight\" target=\"_blank\">Documentation and license information</a>."
 					}
 				}
 			],
-			"Conditions": [
-				{
-					"Trigger": {
-						"Operands": [{
-							"Service": "urn:toggledbits-com:serviceId:DelayLight",
-							"Variable": "Converted",
-							"Value": {
-								"Equals": "1"
-							}
-						}]
-					},
-					"Action": "disable",
-					"Target": "addtimer"
-				}
-			]
+			"Conditions": [{
+				"Trigger": {
+					"Operands": [{
+						"Service": "urn:toggledbits-com:serviceId:DelayLight",
+						"Variable": "Converted",
+						"Value": {
+							"Equals": "1"
+						}
+					}]
+				},
+				"Action": "disable",
+				"Target": "addtimer"
+			}]
 		},
 		{
 			"Label": {
