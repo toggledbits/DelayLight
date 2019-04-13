@@ -1,6 +1,6 @@
 --[[
 	L_DelayLight.lua - Core module for DelayLight
-	Copyright 2017,2018,2019 Patrick H. Rigney, All Rights Reserved.
+	Copyright 20162017,2018 Patrick H. Rigney, All Rights Reserved.
 	This file is part of DelayLight. For license information, see LICENSE at https://github.com/toggledbits/DelayLight
 --]]
 --luacheck: std lua51,module,read globals luup,ignore 542 611 612 614 111/_,no max line length
