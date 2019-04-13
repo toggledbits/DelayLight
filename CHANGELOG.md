@@ -1,5 +1,9 @@
 # Change Log #
 
+## Version 1.10 (develop)
+
+* Fix bug that causes errorneous notification of modified config although no changes have been made.
+
 ## Version 1.9 (released) 
 
 * Upgrade detection of AltUI so we don't falsely detect when bridged (on "real" device triggers AltUI feature registration).
