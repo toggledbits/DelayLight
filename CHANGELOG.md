@@ -1,7 +1,8 @@
 # Change Log #
 
-## Version 1.10 (develop)
+## Version 1.10 (stable-19104)
 
+* Support lock as trigger device
 * Fix bug that causes errorneous notification of modified config although no changes have been made.
 
 ## Version 1.9 (released) 
