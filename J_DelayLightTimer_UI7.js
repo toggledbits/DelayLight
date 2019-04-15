@@ -264,32 +264,46 @@ var DelayLightTimer = (function(api) {
 		return false;
 	}
 
+	/* Note category_num test is intentionally "loose" (not strict type check) */
 	function isSensor( devobj ) {
 		if ( undefined === devobj ) { return false; }
 		if ( deviceType == devobj.device_type ) return true; /* treat ourselves as sensor */
 		return ( devobj.category_num == 4 ) || deviceImplements( devobj, "urn:micasaverde-com:serviceId:SecuritySensor1" );
 	}
 
+	/* Note category_num test is intentionally "loose" (not strict type check) */
 	function isDimmer( devobj ) {
 		if ( undefined === devobj ) { return false; }
-		return devobj.category_num === 2 || deviceImplements( devobj, "urn:upnp-org:serviceId:Dimming1" );
+		return devobj.category_num == 2 || deviceImplements( devobj, "urn:upnp-org:serviceId:Dimming1" );
 	}
 
+	/* Note category_num test is intentionally "loose" (not strict type check) */
 	function isSwitch( devobj ) {
 		if ( undefined === devobj ) { return false; }
-		return ( devobj.category_num === 3 ) ||
+		return ( devobj.category_num == 3 ) ||
 			devobj.device_type === "urn:schemas-upnp-org:device:VSwitch:1" ||
 			deviceImplements( devobj, "urn:upnp-org:serviceId:SwitchPower1" )
+			;
+	}
+
+	/**
+	 * Test if device (obj) is triggerable. That is anything that matches our
+	 * (binary) sensor test, other DelayLightTimers, and door locks.
+	 */
+	/* Note category_num test is intentionally "loose" (not strict type check) */
+	function isTrigger( devobj ) {
+		if ( undefined === devobj ) { return false; }
+		return isSensor( devobj ) ||
+			devobj.device_type == deviceType ||
+			devobj.category_num == 7 ||
+			deviceImplements( devobj, "urn:micasaverde-com:serviceId:DoorLock1" )
 			;
 	}
 
 	function isControllable( devobj ) {
 		// just this for now, in future look at devCap
 		if ( devobj.device_type == deviceType ) { return true; } /* Treat ourselves as controllable */
-		if ( isSwitch( devobj ) || isDimmer( devobj ) ) {
-			return true;
-		}
-		return false;
+		return isSwitch( devobj ) || isDimmer( devobj );
 	}
 
 	/** Update device row. Do not set configModified here, because this is used during restore at startup */
@@ -457,7 +471,7 @@ var DelayLightTimer = (function(api) {
 						if ( roomObj.devices && roomObj.devices.length ) {
 							var first = true; // per-room first
 							for (j=0; j<roomObj.devices.length; ++j) {
-								if ( roomObj.devices[j].id == myDevice || !isSensor( roomObj.devices[j] ) ) {
+								if ( roomObj.devices[j].id == myDevice || !isTrigger( roomObj.devices[j] ) ) {
 									continue;
 								}
 								if (first)

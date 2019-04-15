@@ -13,7 +13,7 @@ local _PLUGIN_ID = 9036
 local _PLUGIN_NAME = "DelayLight"
 local _PLUGIN_VERSION = "1.10"
 local _PLUGIN_URL = "https://www.toggledbits.com/delaylight"
-local _CONFIGVERSION = 00110
+local _CONFIGVERSION = 19104
 
 local MYSID = "urn:toggledbits-com:serviceId:DelayLight"
 local MYTYPE = "urn:schemas-toggledbits-com:device:DelayLight:1"
@@ -499,6 +499,13 @@ local function watchMap( m, tdev )
 				ix.variable = "Timing"
 				ix.valueOn = { { comparison=">", value=0 } }
 				ix.watched = true
+			elseif luup.device_supports_service( "urn:micasaverde-com:serviceId:DoorLock1", tdev ) then
+				D("watchTriggers(): watching %1 (%2) as Lock", nn, ix.devicename)
+				watchVariable( "urn:micasaverde-com:serviceId:DoorLock1", "Status", nn, tdev )
+				ix.service = "urn:micasaverde-com:serviceId:DoorLock1"
+				ix.variable = "Status"
+				ix.valueOn = "1"
+				ix.watched = true
 			else
 				L({level=2,msg="Device %3 %1 (%2) doesn't seem to be a sensor or controllable load. Ignoring."},
 					nn, ix.devicename, ix.list)
@@ -906,7 +913,7 @@ local function plugin_runOnce( pdev )
 		luup.variable_set(MYSID, "NumRunning", 0, pdev)
 		luup.variable_set(MYSID, "Message", "", pdev)
 		luup.variable_set(MYSID, "DebugMode", 0, pdev)
-		luup.variable_set( MYSID, "MaxEvents", "50", tdev )
+		luup.variable_set( MYSID, "MaxEvents", "50", pdev )
 
 		luup.variable_set(MYSID, "Version", _CONFIGVERSION, pdev)
 		return
@@ -949,8 +956,8 @@ local function plugin_runOnce( pdev )
 	if s < 00107 then
 		luup.variable_set(MYSID, "DebugMode", 0, pdev)
 	end
-	if s < 00110 then
-		luup.variable_set( MYSID, "MaxEvents", "50", tdev )
+	if s < 19104 then
+		luup.variable_set( MYSID, "MaxEvents", "50", pdev )
 	end
 
 	-- Update version last.
@@ -1701,6 +1708,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 	elseif action == "status" then
 		local st = {
 			name=_PLUGIN_NAME,
+			plugin=_PLUGIN_ID,
 			version=_PLUGIN_VERSION,
 			configversion=_CONFIGVERSION,
 			author="Patrick H. Rigney (rigpapa)",
