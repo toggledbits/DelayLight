@@ -11,9 +11,9 @@ local debugMode = false
 
 local _PLUGIN_ID = 9036
 local _PLUGIN_NAME = "DelayLight"
-local _PLUGIN_VERSION = "1.10stable-19104"
+local _PLUGIN_VERSION = "1.10develop-19144"
 local _PLUGIN_URL = "https://www.toggledbits.com/delaylight"
-local _CONFIGVERSION = 19104
+local _CONFIGVERSION = 19144
 
 local MYSID = "urn:toggledbits-com:serviceId:DelayLight"
 local MYTYPE = "urn:schemas-toggledbits-com:device:DelayLight:1"
@@ -874,6 +874,8 @@ local function timer_runOnce( tdev )
 			luup.variable_set( TIMERSID, "ActivePeriods", "", tdev )
 			luup.variable_set( TIMERSID, "ManualOnScene", "1", tdev )
 			luup.variable_set( TIMERSID, "ResettableOnDelay", "1", tdev )
+			luup.variable_set( TIMERSID, "TriggerQuieting", "0", tdev )
+			luup.variable_set( TIMERSID, "IgnoreTriggersUntil", "0", tdev )
 		end
 		luup.variable_set( TIMERSID, "Version", _CONFIGVERSION, tdev )
 		return
@@ -891,6 +893,10 @@ local function timer_runOnce( tdev )
 	end
 	if s < 00109 then
 		luup.variable_set( TIMERSID, "ResettableOnDelay", "1", tdev )
+	end
+	if s < 19144 then
+		luup.variable_set( TIMERSID, "TriggerQuieting", "0", tdev )
+		luup.variable_set( TIMERSID, "IgnoreTriggersUntil", "0", tdev )
 	end
 
 	-- Update version last.
@@ -1413,6 +1419,7 @@ timerTick = function (tdev) -- forward-declared
 	else
 		-- idle
 		nextTick = nil
+		setMessage( "Idle", tdev )
 	end
 
 	if nextTick == nil or nextTick >= 5 then
@@ -1512,6 +1519,7 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
 	D("timerWatch(%1,%2,%3,%4,%5,%6)", dev, sid, var, oldVal, newVal, tdev)
 	local status = luup.variable_get( TIMERSID, "Status", tdev )
 	local myname = luup.devices[tdev].description or tdev
+	local now = os.time()
 	if sid == TIMERSID and var == "OffTime" and dev == tdev then
 		-- Watching myself...
 		local newv = tonumber( newVal, 10 )
@@ -1522,7 +1530,7 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
 				setMessage( "Disabled", tdev )
 			end
 		else
-			local delay = newv - os.time()
+			local delay = newv - now
 			if delay < 0 then delay = 0 end
 			setMessage( formatTime(delay), tdev )
 		end
@@ -1546,9 +1554,20 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
 
 			-- Now...
 			if trig then
+				-- Check trigger hold-off.
+				local tho = getVarNumeric( "IgnoreTriggersUntil", 0, tdev, TIMERSID )
+				if tho > 0 and tho > now then
+					-- Not ready yet.
+					D("timerWatch() trigger hold-off not yet met (%1 < %2)", now, tho )
+					setMessage( "Quieting" , tdev )
+					local delay = tho - now
+					scheduleDelay( delay, tdev )
+					return
+				end
+
 				-- Save trigger info
 				luup.variable_set( TIMERSID, "LastTrigger",
-					table.concat({ dev, os.time(), newVal, sid, var}, ","), tdev)
+					table.concat({ dev, now, newVal, sid, var}, ","), tdev)
 
 				-- Trigger for type
 				L("Timer %1 (%2) AUTO triggering by list %3 dev %4 (%5)", tdev, myname,
@@ -1573,7 +1592,7 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
 						if holdOn == 2 then
 							-- When HoldOn = 2, extend off time beyond untrip.
 							trigger( status, tdev )
-						elseif offTime <= os.time() then
+						elseif offTime <= now then
 							-- HoldOn == 1, time expired, immediate reset
 							reset( false, tdev )
 						end
@@ -1603,7 +1622,7 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
 
 					-- Save trigger info
 					luup.variable_set( TIMERSID, "LastTrigger",
-						table.concat({ dev, os.time(), newVal, sid, var}, ","), tdev)
+						table.concat({ dev, now, newVal, sid, var}, ","), tdev)
 
 					-- Trigger manual
 					L("Timer %1 (%2) MANUAL triggering by list %3 dev %4 (%5)", tdev, myname,
@@ -1613,9 +1632,17 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
 					-- Something is turning off.
 					if not isAnyTriggerOn( false, true, tdev ) then
 						-- All loads are now off.
-						D("timerWatch() all loads now off in state %1, reset.", status)
+						D("timerWatch() all loads now off in state %1.", status)
 						if status ~= STATE_IDLE then
 							L("Timer %1 (%2) all loads off, timer resetting from %3.", tdev, luup.devices[tdev].description, status)
+							-- Set up hold-off of triggers, to prevent retriggering my movement when exiting the room
+							-- after manually turning lights off, for example.
+							local holdOff = getVarNumeric( "TriggerQuieting", 0, tdev, TIMERSID )
+							if holdOff > 0 then
+								luup.variable_set( TIMERSID, "IgnoreTriggersUntil", now+holdOff, tdev )
+							else
+								luup.variable_set( TIMERSID, "IgnoreTriggersUntil", 0, tdev )
+							end
 							-- We use resetTimer() here rather than reset(), because reset() sends all
 							-- loads off. That's a problem for polled/non-instant loads, because
 							-- we can get an "off" watch call for a polled load but the next polled

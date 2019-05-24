@@ -15,7 +15,7 @@ var DelayLightTimer = (function(api) {
 	// unique identifier for this plugin...
 	var uuid = '28017722-1101-11e8-9e9e-74d4351650de';
 
-	var pluginVersion = '1.10stable-19104';
+	var pluginVersion = '1.10develop-19144';
 
 	var myModule = {};
 
@@ -588,6 +588,7 @@ var DelayLightTimer = (function(api) {
 			html += '<div class="row">';
 			html += '<div class="col-sm-12 col-md-6 col-lg-3"><h4>Hold-over Mode</h4>By default, "off" devices are turned off when timer expires (mode 0).<br/><select class="tbholdon form-control form-control-sm" id="holdon"><option value="0">(0) Turn off "Off Devices" upon timer expiration</option><option value="1">(1) Do not turn off until timer expires and all triggered sensors have reset</option><option value="2">(2) Do not start off-delay timer until triggered sensors reset</option></select></div>';
 			html += '<div class="col-sm-12 col-md-6 col-lg-3"><h4>"On" Delay</h4>When a trigger device trips, wait this many seconds before turning "On Devices" on:<br/><input class="tbnumeric form-control form-control-sm" id="timer-on"></div>';
+			html += '<div class="col-sm-12 col-md-6 col-lg-3"><h4>Quieting</h4>When all lights are turned off manually, ignore the trigger devices for (seconds, >= 0):<input id="quieting" type="text" class="form-control form-control-sm tbnumeric"></div>';
 			html += '<div class="col-sm-12 col-md-6 col-lg-3 housemodes"><h4>House Modes</h4>Only trigger in the selected house modes (any if no modes are selected):<br/><input type="checkbox" class="tbhousemode" id="mode1">Home <input type="checkbox" class="tbhousemode" id="mode2">Away <input type="checkbox" class="tbhousemode" id="mode3">Night <input type="checkbox" class="tbhousemode" id="mode4">Vacation</div>';
 			html += '</div>'; /* row */
 
@@ -811,6 +812,17 @@ var DelayLightTimer = (function(api) {
 
 			s = api.getDeviceState( myDevice, serviceId, "HoldOn" ) || "0";
 			jQuery("select#holdon").val(s).change( updateStoredConfig );
+			
+			s = api.getDeviceState( myDevice, serviceId, "TriggerQuieting" ) || "0";
+			jQuery("input#quieting").val(s).change( function( ev ) {
+				var $el = jQuery( ev.currentTarget );
+				var val = parseInt( $el.val() );
+				if ( isNaN( val ) || val < 0 ) {
+					$el.val( "0" );
+					val = 0;
+				}
+				api.setDeviceStatePersistent( myDevice, serviceId, "TriggerQuieting", String(val) );
+			});
 
 			s = api.getDeviceState( myDevice, serviceId, "HouseModes" ) || "";
 			if ( "" !== s ) {
