@@ -1720,6 +1720,8 @@ local function getDevice( dev, pdev, v )
 	return devinfo
 end
 
+local EOL = "\r\n"
+
 function request( lul_request, lul_parameters, lul_outputformat )
 	D("request(%1,%2,%3) luup.device=%4", lul_request, lul_parameters, lul_outputformat, luup.device)
 	local action = lul_parameters['action'] or lul_parameters['command'] or ""
@@ -1760,7 +1762,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 				table.insert( st.devices, devinfo )
 			end
 		end
-		return json.encode( st ), "application/json"
+		return "PLEASE COPY THIS ENTIRE OUTPUT WITHOUT CHANGES"..EOL.."```"..EOL..json.encode( st )..EOL.."```", "text/plain"
 	else
 		return "Not implemented: " .. action, "text/plain"
 	end
