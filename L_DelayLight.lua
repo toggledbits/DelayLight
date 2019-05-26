@@ -604,7 +604,7 @@ local function deviceOnOff( targetDevice, state, vtDev )
 				D("deviceOnOff() action SetTarget for device %1 returned %2 %3", targetId, rc, rs)
 			elseif luup.devices[targetId].device_type == MYTYPE then
 				-- Yes, we can control another DelayLightTimer!
-				local action = iif( state, "Trigger", "Reset" )
+				local action = state and "Trigger" or "Reset"
 				D("deviceOnOff() handling %1 (%2) as DelayLight, action %3", targetId, desc, action)
 				local rc, rs = luup.call_action( TIMERSID, action, {}, targetId )
 				D("deviceOnOff() action %4 for device %1 returned %2 %3", targetId, rc, rs, action)
@@ -1139,7 +1139,7 @@ function setEnabled( enabled, tdev )
 		return
 	end
 	addEvent{ event="enableaction", dev=tdev, enabled=enabled }
-	luup.variable_set( TIMERSID, "Enabled", iif( enabled, "1", "0" ), tdev )
+	luup.variable_set( TIMERSID, "Enabled", enabled and "1" or "0", tdev )
 	-- If disabling, do nothing else, so current actions complete/expire.
 	if enabled then
 		-- start new timer thread
@@ -1417,9 +1417,9 @@ timerTick = function (tdev) -- forward-declared
 			nextTick = nil
 		end
 	else
-		-- idle
+		-- idle or disabled
 		nextTick = nil
-		setMessage( "Idle", tdev )
+		setMessage( isEnabled( tdev ) and "Idle" or "Disabled", tdev )
 	end
 
 	if nextTick == nil or nextTick >= 5 then
@@ -1524,11 +1524,7 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
 		-- Watching myself...
 		local newv = tonumber( newVal, 10 )
 		if newv == 0 then
-			if isEnabled( tdev ) then
-				setMessage( "Idle", tdev )
-			else
-				setMessage( "Disabled", tdev )
-			end
+			setMessage( isEnabled( tdev ) and "Idle" or "Disabled", tdev )
 		else
 			local delay = newv - now
 			if delay < 0 then delay = 0 end
@@ -1597,7 +1593,7 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
 							reset( false, tdev )
 						end
 					else
-						setMessage( iif( holdOn==1, "Hold-over", "Waiting" ) .. " for " .. luup.devices[ldev or tdev].description, tdev )
+						setMessage( ( holdOn == 1 and "Hold-over" or "Waiting" ) .. " for " .. luup.devices[ldev or tdev].description, tdev )
 					end
 				end
 			end
@@ -1701,6 +1697,7 @@ local function getDevice( dev, pdev, v )
 		, ['device_file'] = luup.attr_get( "device_file", dev )
 		, manufacturer = luup.attr_get( "manufacturer", dev ) or ""
 		, model = luup.attr_get( "model", dev ) or ""
+		, plugin = luup.attr_get( "plugin", dev )
 	}
 	local rc,t,httpStatus,uri
 	if isOpenLuup then
@@ -1729,7 +1726,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 	if action == "debug" then
 		debugMode = not debugMode
 		D("debug mode is now %1", debugMode)
-		return "Debug mode is now " .. iif( debugMode, "on", "off" ), "text/plain"
+		return "Debug mode is now " .. ( debugMode and "on" or "off" ), "text/plain"
 	end
 
 	if action == "capabilities" then
