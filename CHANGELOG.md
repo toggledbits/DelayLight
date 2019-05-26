@@ -1,6 +1,6 @@
 # Change Log #
 
-## Version 1.10 (develop-19144)
+## Version 1.10 (reelased)
 
 * Add trigger quieting--a span of time after which device are turned off (manually) that the triggers are ignored (so if one turns off lights manually in a room with a motion sensor, the motion of exiting the room does not turn the lights immediately back on).
 * Support lock as trigger device.
