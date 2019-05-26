@@ -172,6 +172,15 @@ As of version 1.5, if all triggers reset during the "on" delay, the timer will r
 To have the "on" delay complete unconditionally and turn the lights on for the "off" delay period
 (the behavior prior to 1.5), set the `ResettableOnDelay` state variable to 0.
 
+#### Quieting ####
+
+Quieting causes the triggers to be ignored for a period following a *manual* shut-off of all controlled devices. The classic
+use case for this is a room with a light that uses a motion sensor for presence detection and automatic turn-on of lights on
+motion. Without quieting, if the light is turned off manually
+as the operator exits the room, the motion of exiting may cause automatic timing to be triggered and turn the lights back on.
+By enforcing a "quiet period" following the (manual) shut-off of the light, the operator may exit within that period without
+the resulting motion triggering the timer and turning the light back on.
+
 #### House Modes ####
 
 To limit automatic triggering to certain house modes, select those modes. If no modes are selected, triggering occurs in all modes.
