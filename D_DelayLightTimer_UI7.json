@@ -299,9 +299,9 @@
 						}
 					},
 					{
-						"timing": "2",
+						"starting": "2",
 						"HumanFriendlyText": {
-							"lang_tag": "tb_st_timing",
+							"lang_tag": "tb_st_starting",
 							"text": "_DEVICE_NAME_ starts on-delay timing"
 						}
 					}
