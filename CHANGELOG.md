@@ -1,5 +1,9 @@
 # Change Log #
 
+## Version 1.11 (development)
+
+* Work around 7.0.29 (or possibly earlier) firmware bug which defines Target and Status state variables in SwitchPower1, misleading DelayLight into thinking a lock can be supported as a switch; this in fact does not work at all, and seems to be an error in the firmware polling update of the lock (wrong service ID used). See https://community.getvera.com/t/door-locks-have-misplaced-switchpower1-state-variables/208828
+
 ## Version 1.10 (released)
 
 * Add trigger quieting--a span of time after which device are turned off (manually) that the triggers are ignored (so if one turns off lights manually in a room with a motion sensor, the motion of exiting the room does not turn the lights immediately back on).
