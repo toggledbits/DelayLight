@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9036
 local _PLUGIN_NAME = "DelayLight"
-local _PLUGIN_VERSION = "1.10"
+local _PLUGIN_VERSION = "1.11develop-19152"
 local _PLUGIN_URL = "https://www.toggledbits.com/delaylight"
 local _CONFIGVERSION = 19144
 
@@ -323,16 +323,20 @@ end
 
 -- Return true if we can treat the device as a switch
 local function isSwitchType( dev, obj, vtDev )
+	D("isSwitchType(%1,%2,%3)", dev, obj, vtDev)
 	assert(type(dev) == "number")
 	obj = obj or luup.devices[dev]
+	D("isSwitchType() obj=%1", obj)
 	if obj == nil then return false end
 	-- Can be recognized by category, implying the device is an actual switch or dimmer
 	if obj.category_num == 2 or obj.category_num == 3 then return true end
 	-- VirtualSwitch is special
 	if obj.device_type == "urn:schemas-upnp-org:device:VSwitch:1" then return true end
 	-- Devices that implement dimmer behavior may be considered switches
+	D("isSwitchType() device supports %1=%2", DIMMER_SID, luup.device_supports_service(DIMMER_SID,dev))
 	if luup.device_supports_service(DIMMER_SID, dev) then return true end
 	-- Finally, if it implements switch behavior, treat as switch
+	D("isSwitchType() device supports %1=%2", SWITCH_SID, luup.device_supports_service(SWITCH_SID,dev))
 	return luup.device_supports_service(SWITCH_SID, dev)
 end
 
@@ -468,7 +472,23 @@ local function watchMap( m, tdev )
 			L({level=2,msg="Device %1 (%2 list) not found... it may have been deleted!"}, nn, ix.list)
 		elseif not (ix.watched or false) then
 			ix.devicename = luup.devices[nn].description
-			if isSensorType( nn, nil, tdev ) then -- Security/binary sensor (has tripped/non-tripped)
+			-- Test most-specific to least-specific
+			if luup.device_supports_service( "urn:micasaverde-com:serviceId:DoorLock1", nn ) then
+				-- The early test here is important. See https://community.getvera.com/t/door-locks-have-misplaced-switchpower1-state-variables/208828
+				D("watchTriggers(): watching %1 (%2) as Lock", nn, ix.devicename)
+				watchVariable( "urn:micasaverde-com:serviceId:DoorLock1", "Status", nn, tdev )
+				ix.service = "urn:micasaverde-com:serviceId:DoorLock1"
+				ix.variable = "Status"
+				ix.valueOn = "1"
+				ix.watched = true
+			elseif luup.devices[nn].device_type == TIMERTYPE then
+				D("watchTriggers(): watching %1 (%2) as DelayLight", nn, ix.devicename)
+				watchVariable( TIMERSID, "Timing", nn, tdev )
+				ix.service = TIMERSID
+				ix.variable = "Timing"
+				ix.valueOn = { { comparison=">", value=0 } }
+				ix.watched = true
+			elseif isSensorType( nn, nil, tdev ) then -- Security/binary sensor (has tripped/non-tripped)
 				D("watchTriggers(): watching %1 (%2) as sensor", nn, ix.devicename)
 				watchVariable( SENSOR_SID, "Tripped", nn, tdev)
 				ix.service = SENSOR_SID
@@ -489,20 +509,6 @@ local function watchMap( m, tdev )
 				D("watchTriggers(): watching %1 (%2) as switch", nn, ix.devicename)
 				watchVariable( SWITCH_SID, "Status", nn, tdev )
 				ix.service = SWITCH_SID
-				ix.variable = "Status"
-				ix.valueOn = "1"
-				ix.watched = true
-			elseif luup.devices[nn].device_type == TIMERTYPE then
-				D("watchTriggers(): watching %1 (%2) as DelayLight", nn, ix.devicename)
-				watchVariable( TIMERSID, "Timing", nn, tdev )
-				ix.service = TIMERSID
-				ix.variable = "Timing"
-				ix.valueOn = { { comparison=">", value=0 } }
-				ix.watched = true
-			elseif luup.device_supports_service( "urn:micasaverde-com:serviceId:DoorLock1", tdev ) then
-				D("watchTriggers(): watching %1 (%2) as Lock", nn, ix.devicename)
-				watchVariable( "urn:micasaverde-com:serviceId:DoorLock1", "Status", nn, tdev )
-				ix.service = "urn:micasaverde-com:serviceId:DoorLock1"
 				ix.variable = "Status"
 				ix.valueOn = "1"
 				ix.watched = true
