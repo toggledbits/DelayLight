@@ -1,6 +1,6 @@
 # Change Log #
 
-## Version 1.11 (development)
+## Version 1.11 (released)
 
 * Work around 7.0.29 (or possibly earlier) firmware bug which defines Target and Status state variables in SwitchPower1, misleading DelayLight into thinking a lock can be supported as a switch; this in fact does not work at all, and seems to be an error in the firmware polling update of the lock (wrong service ID used). See https://community.getvera.com/t/door-locks-have-misplaced-switchpower1-state-variables/208828
 
