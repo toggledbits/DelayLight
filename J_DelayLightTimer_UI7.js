@@ -15,14 +15,13 @@ var DelayLightTimer = (function(api) {
 	// unique identifier for this plugin...
 	var uuid = '28017722-1101-11e8-9e9e-74d4351650de';
 
-	var pluginVersion = '1.11';
+	var pluginVersion = '1.12develop-19202';
 
 	var myModule = {};
 
 	var serviceId = "urn:toggledbits-com:serviceId:DelayLightTimer";
 	var deviceType = "urn:schemas-toggledbits-com:device:DelayLightTimer:1";
 
-	var deviceByNumber = [];
 	var devCap = {};
 	var configModified = false;
 
@@ -312,7 +311,7 @@ var DelayLightTimer = (function(api) {
 
 		var dimmer = false;
 		if ( "" !== devNum && !isNaN( parseInt(devNum) ) ) {
-			var devobj = deviceByNumber[devNum];
+			var devobj = api.getDeviceObject( devNum );
 			dimmer = ( devobj !== undefined && isDimmer( devobj ) );
 		}
 		if ( dimmer ) {
@@ -371,7 +370,7 @@ var DelayLightTimer = (function(api) {
 
 		updateRowForSelectedDevice( row );
 
-		if ( !isNaN( parseInt(devnum) ) && isDimmer( deviceByNumber[devnum] ) ) {
+		if ( !isNaN( parseInt(devnum) ) && isDimmer( api.getDeviceObject( devnum ) ) ) {
 			/* Dimmer */
 			jQuery('input.dimminglevel', row).show().prop( 'disabled', false ).val(t.shift() || "");
 		} else {
@@ -389,21 +388,27 @@ var DelayLightTimer = (function(api) {
 			var i, j, r, s, t, html = "";
 
 			// Make our own list of devices, sorted by room.
-			var devices = api.getListOfDevices();
-			deviceByNumber = [];
-			var rooms = [];
+			var devices = api.cloneObject( api.getListOfDevices() );
 			var noroom = { "id": 0, "name": "No Room", "devices": [] };
-			rooms[noroom.id] = noroom;
-			for (i=0; i<devices.length; i+=1) {
-				var devobj = api.cloneObject( devices[i] );
+			var rooms = [ noroom ];
+			var roomIx = {};
+			roomIx[String(noroom.id)] = noroom;
+			var dd = devices.sort( function( a, b ) {
+				if ( a.name.toLowerCase() === b.name.toLowerCase() ) {
+					return a.id < b.id ? -1 : 1;
+				}
+				return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
+			});
+			for (i=0; i<dd.length; i+=1) {
+				var devobj = api.cloneObject( dd[i] );
 				devobj.friendlyName = "#" + devobj.id + " " + devobj.name;
-				deviceByNumber[devobj.id] = devobj;
 				var roomid = devobj.room || 0;
-				var roomObj = rooms[roomid];
+				var roomObj = roomIx[String(roomid)];
 				if ( roomObj === undefined ) {
 					roomObj = api.cloneObject( api.getRoomObject( roomid ) );
 					roomObj.devices = [];
-					rooms[roomid] = roomObj;
+					roomIx[String(roomid)] = roomObj;
+					rooms[rooms.length] = roomObj;
 				}
 				roomObj.devices.push( devobj );
 			}
