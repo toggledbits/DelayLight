@@ -24,6 +24,7 @@ var DelayLightTimer = (function(api) {
 
 	var devCap = {};
 	var configModified = false;
+	var roomDevices = [];
 
 	function enquote( s ) {
 		return JSON.stringify( s );
@@ -284,6 +285,11 @@ var DelayLightTimer = (function(api) {
 			deviceImplements( devobj, "urn:upnp-org:serviceId:SwitchPower1" )
 			;
 	}
+	
+	function isHidden( devobj ) {
+		/* NB Very specific test (for specific val not type restricted) */
+		return 1==devobj.invisible || 1==devobj.hidden;
+	}
 
 	/**
 	 * Test if device (obj) is triggerable. That is anything that matches our
@@ -359,23 +365,48 @@ var DelayLightTimer = (function(api) {
 		var row = jQuery('div#' + base + 'Device' + ix);
 		var t = devspec.split('=');
 		var devnum = t.shift();
+		var devobj = api.getDeviceObject( parseInt( devnum ) || -1 );
 
 		// If the currently selected option isn't on the list, add it, so we don't lose it.
 		var el = jQuery('select option[value="' + devnum + '"]', row);
 		if ( 0 === el.length ) {
-			jQuery('select', row).append($('<option>', { value: devnum }).text('Device #' + devnum + ' (custom config)').prop('selected', true));
+			if ( devobj ) {
+				jQuery('select', row).append($('<option/>').val(devnum).text('Device #' + devnum + ' ' + devobj.name + ' (custom config)').prop('selected', true));
+			} else {
+				jQuery('select', row).append($('<option/>').val(devnum).text('Device #' + devnum + ' (missing device)').prop('selected', true));
+			}
 		} else {
 			el.prop('selected', true);
 		}
 
 		updateRowForSelectedDevice( row );
 
-		if ( !isNaN( parseInt(devnum) ) && isDimmer( api.getDeviceObject( devnum ) ) ) {
+		if ( !isNaN( parseInt(devnum) ) && isDimmer( devobj ) ) {
 			/* Dimmer */
 			jQuery('input.dimminglevel', row).show().prop( 'disabled', false ).val(t.shift() || "");
 		} else {
 			jQuery('input.dimminglevel', row).hide().prop( 'disabled', true );
 		}
+	}
+
+	function makeDeviceMenu( $target, filter ) {
+		roomDevices.forEach( function( roomObj ) {
+			if ( roomObj.devices && roomObj.devices.length ) {
+				var $group = false;
+				for (j=0; j<roomObj.devices.length; ++j) {
+					if ( isHidden( roomObj.devices[j] ) ) continue;
+					if ( filter && ! filter( roomObj.devices[j] ) ) continue;
+					if ( !$group ) {
+						$group = jQuery( '<optgroup/>', { id: roomObj.id, label: roomObj.name } ).appendTo( $target );
+					}
+					jQuery( '<option/>' )
+						.val(roomObj.devices[j].id)
+						.text(roomObj.devices[j].friendlyName || roomObj.devices[j].name)
+						.appendTo($group);
+				}
+			}
+		});
+		return $target;
 	}
 
 	function doSettings( myDevice, capabilities )
@@ -412,7 +443,7 @@ var DelayLightTimer = (function(api) {
 				}
 				roomObj.devices.push( devobj );
 			}
-			r = rooms.sort(
+			roomDevices = rooms.sort(
 				// Special sort for room name -- sorts "No Room" last
 				function (a, b) {
 					if (a.id === 0) return 1;
@@ -426,9 +457,9 @@ var DelayLightTimer = (function(api) {
 			if ( undefined !== scenes ) {
 				for ( i=0; i<scenes.length; i+=1 ) {
 					if ( undefined === roomScenes[scenes[i].room] ) {
-						roomScenes[scenes[i].room] = [];
+						roomScenes[scenes[i].room] = { room: roomIx[String(scenes[i].room)], scenes: [] };
 					}
-					roomScenes[scenes[i].room].push(scenes[i]);
+					roomScenes[scenes[i].room].scenes.push(scenes[i]);
 				}
 			}
 
@@ -472,20 +503,6 @@ var DelayLightTimer = (function(api) {
 					html += '<div id="sensorgroup">';
 					html += '<div class="row sensorrow">';
 					html += '<div class="col-xs-12 col-sm-12 col-md-6"><select class="sensor form-control form-control-sm"><option value="">--choose--</option>';
-					r.forEach( function( roomObj ) {
-						if ( roomObj.devices && roomObj.devices.length ) {
-							var first = true; // per-room first
-							for (j=0; j<roomObj.devices.length; ++j) {
-								if ( roomObj.devices[j].id == myDevice || !isTrigger( roomObj.devices[j] ) ) {
-									continue;
-								}
-								if (first)
-									html += '<option class="room" disabled>--' + roomObj.name + '--</option>';
-								first = false;
-								html += '<option class="device" value="' + roomObj.devices[j].id + '">' + roomObj.devices[j].friendlyName + '</option>';
-							}
-						}
-					});
 					html += '</select></div>';
 					html += '<div class="col-xs-6 col-sm-6 col-md-4"><input type="checkbox" class="sensorinvert tbinvert">Invert</div>';
 					html += '<div class="col-xs-6 col-sm-6 col-md-2"><i class="material-icons w3-large color-green cursor-hand" title="Add Trigger Device" id="add-sensor-btn">add_circle_outline</i></div>';
@@ -496,21 +513,6 @@ var DelayLightTimer = (function(api) {
 					html += '<div id="inhibitgroup">';
 					html += '<div class="row inhibitrow">';
 					html += '<div class="col-xs-12 col-sm-12 col-md-6"><select class="inhibit form-control form-control-sm"><option value="">--choose--</option>';
-					r.forEach( function( roomObj ) {
-						if ( roomObj.devices && roomObj.devices.length ) {
-							var first = true; // per-room first
-							for (j=0; j<roomObj.devices.length; ++j) {
-								if ( roomObj.devices[j].id == myDevice ||
-										! ( isSensor( roomObj.devices[j] ) || isSwitch( roomObj.devices[j] ) ) ) {
-									continue;
-								}
-								if (first)
-									html += '<option class="room" disabled>--' + roomObj.name + '--</option>';
-								first = false;
-								html += '<option class="device" value="' + roomObj.devices[j].id + '">' + roomObj.devices[j].friendlyName + '</option>';
-							}
-						}
-					});
 					html += '</select></div>';
 					html += '<div class="col-xs-6 col-sm-6 col-md-4"><input type="checkbox" class="inhinvert tbinvert" id="inhinvert1">Invert</div>';
 					html += '<div class="col-xs-6 col-sm-6 col-md-2"><i class="material-icons w3-large color-green cursor-hand" title="Add Inhibitor" id="add-inhibit-btn">add_circle_outline</i></div>';
@@ -525,29 +527,6 @@ var DelayLightTimer = (function(api) {
 				html += '<div id="onDeviceGroup">';
 					html += '<div class="row onDeviceRow" id="onDevice1">';
 					html += '<div class="col-xs-12 col-sm-12 col-md-6"><select class="onDevice form-control form-control-sm"><option value="">--choose--</option>';
-					r.forEach( function( roomObj ) {
-						if ( roomObj.devices && roomObj.devices.length ) {
-							var first = true; /* per-room first */
-							for (j=0; j<roomObj.devices.length; ++j) {
-								var devid = roomObj.devices[j].id;
-								if ( devid == myDevice || ! isControllable( roomObj.devices[j] ) ) {
-									continue;
-								}
-								if (first)
-									html += "<option disabled>--" + roomObj.name + "--</option>";
-								first = false;
-								html += '<option value="' + devid + '">' + roomObj.devices[j].friendlyName + '</option>';
-							}
-							if ( undefined !== roomScenes[ roomObj.id ] ) {
-								var rs = roomScenes[roomObj.id];
-								if (rs.length > 0 && first)
-									html += "<option disabled>--" + roomObj.name + "--</option>";
-								for ( j=0; j<rs.length; ++j ) {
-									html += '<option class="scene" value="S' + rs[j].id + '">Scene: ' + rs[j].name + '</option>';
-								}
-							}
-						}
-					});
 					html += '</select></div>';
 					html += '<div class="col-xs-6 col-sm-6 col-md-4 dimmergroup"><input class="form-control form-control-sm tbnumeric dimminglevel" placeholder="level" disabled style="display: none;"></div>';
 					html += '<div class="col-xs-6 col-sm-6 col-md-2"><i class="material-icons w3-large color-green cursor-hand" id="add-ondevice-btn">add_circle_outline</i></div>';
@@ -558,29 +537,6 @@ var DelayLightTimer = (function(api) {
 				html += '<div id="offDeviceGroup">';
 					html += '<div class="row offDeviceRow" id="offDevice1">';
 					html += '<div class="col-xs-12 col-sm-12 col-md-6"><select class="offDevice form-control form-control-sm"><option value="">--choose--</option>';
-					r.forEach( function( roomObj ) {
-						if ( roomObj.devices && roomObj.devices.length ) {
-							var first = true; /* per-room first */
-							for (j=0; j<roomObj.devices.length; ++j) {
-								var devid = roomObj.devices[j].id;
-								if ( devid == myDevice || ! isControllable( roomObj.devices[j] ) ) {
-									continue;
-								}
-								if (first)
-									html += "<option disabled>--" + roomObj.name + "--</option>";
-								first = false;
-								html += '<option value="' + devid + '">' + roomObj.devices[j].friendlyName + '</option>';
-							}
-							if ( undefined !== roomScenes[ roomObj.id ] ) {
-								var rs = roomScenes[roomObj.id];
-								if (rs.length > 0 && first)
-									html += "<option disabled>--" + roomObj.name + "--</option>";
-								for ( j=0; j<rs.length; ++j ) {
-									html += '<option class="scene" value="S' + rs[j].id + '">Scene: ' + rs[j].name + '</option>';
-								}
-							}
-						}
-					});
 					html += '</select></div>';
 					html += '<div class="col-xs-6 col-sm-6 col-md-4 dimmergroup"><input class="form-control form-control-sm tbnumeric dimminglevel" placeholder="level" disabled style="display: none;"></div>';
 					html += '<div class="col-xs-6 col-sm-6 col-md-2"><i class="material-icons w3-large color-green cursor-hand" id="add-offdevice-btn">add_circle_outline</i></div>';
@@ -609,6 +565,41 @@ var DelayLightTimer = (function(api) {
 
 			// Push generated HTML to page
 			api.setCpanelContent(html);
+			
+			// Create device menus
+			makeDeviceMenu( jQuery( 'select.sensor' ), function( d ) {
+				return d.id !== myDevice && isTrigger( d );
+			});
+			makeDeviceMenu( jQuery( 'select.inhibit' ), function( d ) {
+				return d.id !== myDevice && ( isSensor( d ) || isSwitch( d ) );
+			});
+			makeDeviceMenu( jQuery( 'select.onDevice' ), function( d ) {
+				return d.id !== myDevice && isControllable( d );
+			});
+			makeDeviceMenu( jQuery( 'select.offDevice' ), function( d ) {
+				return d.id !== myDevice && isControllable( d );
+			});
+			/* Append scenes to on and off device menus */
+			roomScenes.forEach( function( l, ix ) {
+				/* PHR??? Interesting, using #id doesn't work for optgroup in jQuery 1.12 */
+				var $gra = jQuery( 'select.onDevice optgroup[id=' + ix + ']' );
+				if ( 0 === $gra.length ) {
+					$gra = jQuery( '<optgroup/>', { id: ix, label: l.room.name } )
+						.appendTo( jQuery( 'select.onDevice' ) );
+				}
+				var $grb = jQuery( 'select.offDevice optgroup[id=' + ix + ']' );
+				if ( 0 === $grb.length ) {
+					$grb = jQuery( '<optgroup/>', { id: ix, label: l.room.name } )
+						.appendTo( jQuery( 'select.offDevice' ) );
+				}
+				for ( var z=0; z<l.scenes.length; ++z ) {
+					jQuery( '<option/>' ).val( 'S'+l.scenes[z].id )
+						.text( 'Scene: '+l.scenes[z].name )
+						.appendTo( $gra )
+						.clone()
+						.appendTo( $grb );
+				}
+			});
 
 			// Restore values
 			var devnum, invert, row;
