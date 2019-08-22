@@ -11,9 +11,9 @@ local debugMode = false
 
 local _PLUGIN_ID = 9036
 local _PLUGIN_NAME = "DelayLight"
-local _PLUGIN_VERSION = "1.12develop-19202"
+local _PLUGIN_VERSION = "1.12develop-19233"
 local _PLUGIN_URL = "https://www.toggledbits.com/delaylight"
-local _CONFIGVERSION = 19144
+local _CONFIGVERSION = 19233
 
 local MYSID = "urn:toggledbits-com:serviceId:DelayLight"
 local MYTYPE = "urn:schemas-toggledbits-com:device:DelayLight:1"
@@ -882,6 +882,8 @@ local function timer_runOnce( tdev )
 			luup.variable_set( TIMERSID, "ResettableOnDelay", "1", tdev )
 			luup.variable_set( TIMERSID, "TriggerQuieting", "0", tdev )
 			luup.variable_set( TIMERSID, "IgnoreTriggersUntil", "0", tdev )
+			luup.variable_set( TIMERSID, "ApplyInhibitorsManual", "0", tdev )
+			luup.variable_set( TIMERSID, "ApplyScheduleManual", "0", tdev )
 		end
 		luup.variable_set( TIMERSID, "Version", _CONFIGVERSION, tdev )
 		return
@@ -903,6 +905,10 @@ local function timer_runOnce( tdev )
 	if s < 19144 then
 		luup.variable_set( TIMERSID, "TriggerQuieting", "0", tdev )
 		luup.variable_set( TIMERSID, "IgnoreTriggersUntil", "0", tdev )
+	end
+	if s < 19233 then
+		luup.variable_set( TIMERSID, "ApplyInhibitorsManual", "0", tdev )
+		luup.variable_set( TIMERSID, "ApplyScheduleManual", "0", tdev )
 	end
 
 	-- Update version last.
@@ -1025,16 +1031,18 @@ local function trigger( state, tdev )
 	end
 
 	-- If we're not in active period, no effect.
-	if not isActivePeriod( tdev ) then
+	local isActive = isActivePeriod( tdev )
+	if not isActive and getVarNumeric( "ApplyScheduleManual", 0, tdev, TIMERSID ) ~= 0 then
 		D("trigger() inactive period, not triggering.")
-		setMessage("Inactive period", tdev)
+		setMessage("Inactive period (all modes)", tdev)
 		return
 	end
 
 	-- If inhibited by device, no effect.
-	if isInhibited( tdev ) then
+	local isInhibit = isInhibited( tdev )
+	if isInhibit and getVarNumeric( "ApplyInhibitorsManual", 0, tdev, TIMERSID ) ~= 0 then
 		D("trigger() inhibited, not triggering.")
-		setMessage("Inhibited", tdev)
+		setMessage("Inhibited (all modes)", tdev)
 		return
 	end
 
@@ -1047,6 +1055,14 @@ local function trigger( state, tdev )
 		-- Trigger from idle state
 		local timing = 1
 		if state == STATE_AUTO then
+			if not isActive then
+				setMessage("Inactive period (no auto)", tdev)
+				return
+			end
+			if isInhibit then
+				setMessage("Inhibited (no auto)", tdev)
+				return
+			end
 			if not isActiveHouseMode( tdev ) then
 				D("trigger() not in an active house mode, not triggering")
 				-- Not an active house mode; do nothing.
@@ -1092,8 +1108,14 @@ local function trigger( state, tdev )
 		-- Trigger in man or auto is REtrigger; extend timing by current mode's delay
 		local delay
 		if status == STATE_AUTO then
+			if isInhibit or not isActive then
+				D("trigger() retrigger by auto muted, inactive period or inhibited (%1,%2)",
+					not isActive, isInhibit)
+				return
+			end
 			if not isActiveHouseMode( tdev ) then
-				D("trigger() not in active house mode, not re-triggering/extending");
+				D("trigger() not in active house mode, not re-triggering/extending")
+				return
 			end
 			delay = getVarNumeric( "AutoDelay", 60, tdev, TIMERSID )
 			if delay == 0 then return end -- 0 delay means no auto-on function
@@ -1520,7 +1542,7 @@ function tick(p)
 	luup.call_delay( "delayLightTick", delay, p )
 end
 
--- Handle the timer-specific watch (dispatched from the watch callback)
+-- Handle the timer-specific device watches (dispatched from the watch callback)
 local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
 	D("timerWatch(%1,%2,%3,%4,%5,%6)", dev, sid, var, oldVal, newVal, tdev)
 	local status = luup.variable_get( TIMERSID, "Status", tdev )
@@ -1542,7 +1564,7 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
 
 		local dinfo = timerState[tostring(tdev)].trigger[tostring(dev)]
 		if dinfo ~= nil then
-			-- Trigger device is changing state.
+			-- Trigger device (specifically) is changing state.
 
 			-- Make sure it's our status trigger service/variable
 			if sid ~= dinfo.service or var ~= dinfo.variable then return end -- not something we handle
@@ -1566,6 +1588,23 @@ local function timerWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
 					scheduleDelay( delay, tdev )
 					return
 				end
+--[[
+				if not isActiveHouseMode( tdev ) then
+					D("timerWatch() ignoring trigger device, inactive house mode")
+					if status == STATE_IDLE then setMessage("Ignored trigger (house mode)", tdev) end
+					return
+				end
+				if not isActivePeriod( tdev ) then
+					D("timerWatch() ignoring trigger device, inactive period")
+					if status == STATE_IDLE then setMessage("Ignored trigger (schedule)", tdev) end
+					return
+				end
+				if isInhibited( tdev ) then
+					D("timerWatch() ignoring trigger device, inhibit active")
+					if status == STATE_IDLE then setMessage("Ignored trigger (inhibited)", tdev) end
+					return
+				end
+--]]
 
 				-- Save trigger info
 				luup.variable_set( TIMERSID, "LastTrigger",
