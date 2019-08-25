@@ -15,7 +15,7 @@ var DelayLightTimer = (function(api) {
 	// unique identifier for this plugin...
 	var uuid = '28017722-1101-11e8-9e9e-74d4351650de';
 
-	var pluginVersion = '1.12develop-19202';
+	var pluginVersion = '1.12';
 
 	var myModule = {};
 
@@ -285,7 +285,7 @@ var DelayLightTimer = (function(api) {
 			deviceImplements( devobj, "urn:upnp-org:serviceId:SwitchPower1" )
 			;
 	}
-	
+
 	function isHidden( devobj ) {
 		/* NB Very specific test (for specific val not type restricted) */
 		return 1==devobj.invisible || 1==devobj.hidden;
@@ -558,14 +558,14 @@ var DelayLightTimer = (function(api) {
 			html += '<div id="tbbegging"><em>Find DelayLight useful?</em> Please consider <a href="https://www.toggledbits.com/donate" target="_blank">a small donation</a> to support my work and this and other plugins. I am grateful for any support you choose to give!</div>';
 			html += '<div id="tbcopyright">DelayLight ver ' + pluginVersion + ' &copy; 2016,2017,2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. For documentation and license, please see this project\'s <a href="https://github.com/toggledbits/DelayLight" target="_blank">GitHub repository</a>.</div>';
 			html += '<div id="supportlinks">Support links: ' +
-				' <a href="https://github.com/toggledbits/DelayLight/" target="_blank">Documentation/README</a>' + 
+				' <a href="https://github.com/toggledbits/DelayLight/" target="_blank">Documentation/README</a>' +
 				' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_DelayLight&action=debug" target="_blank">Toggle&nbsp;Debug</a>' +
 				' &bull; <a href="/cgi-bin/cmh/log.sh?Device=LuaUPnP" target="_blank">Log&nbsp;File</a>' +
 				' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_DelayLight&action=status" target="_blank">Plugin&nbsp;Status</a></div>';
 
 			// Push generated HTML to page
 			api.setCpanelContent(html);
-			
+
 			// Create device menus
 			makeDeviceMenu( jQuery( 'select.sensor' ), function( d ) {
 				return d.id !== myDevice && isTrigger( d );
@@ -809,7 +809,7 @@ var DelayLightTimer = (function(api) {
 
 			s = api.getDeviceState( myDevice, serviceId, "HoldOn" ) || "0";
 			jQuery("select#holdon").val(s).change( updateStoredConfig );
-			
+
 			s = api.getDeviceState( myDevice, serviceId, "TriggerQuieting" ) || "0";
 			jQuery("input#quieting").val(s).change( function( ev ) {
 				var $el = jQuery( ev.currentTarget );
