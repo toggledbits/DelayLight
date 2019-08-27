@@ -15,7 +15,7 @@ var DelayLightTimer = (function(api) {
 	// unique identifier for this plugin...
 	var uuid = '28017722-1101-11e8-9e9e-74d4351650de';
 
-	var pluginVersion = '1.12';
+	var pluginVersion = '1.13develop-19238';
 
 	var myModule = {};
 
@@ -411,7 +411,7 @@ var DelayLightTimer = (function(api) {
 
 	function doSettings( myDevice, capabilities )
 	{
-		/* try */ {
+		try {
 			initPlugin();
 
 			devCap = capabilities;
@@ -437,6 +437,7 @@ var DelayLightTimer = (function(api) {
 				var roomObj = roomIx[String(roomid)];
 				if ( roomObj === undefined ) {
 					roomObj = api.cloneObject( api.getRoomObject( roomid ) );
+					roomObj.name = roomObj.name || ( "Room #" + roomid );
 					roomObj.devices = [];
 					roomIx[String(roomid)] = roomObj;
 					rooms[rooms.length] = roomObj;
@@ -456,10 +457,11 @@ var DelayLightTimer = (function(api) {
 			var roomScenes = [];
 			if ( undefined !== scenes ) {
 				for ( i=0; i<scenes.length; i+=1 ) {
-					if ( undefined === roomScenes[scenes[i].room] ) {
-						roomScenes[scenes[i].room] = { room: roomIx[String(scenes[i].room)], scenes: [] };
+					var rm = String(scenes[i].room || 0);
+					if ( undefined === roomScenes[rm] ) {
+						roomScenes[rm] = { room: roomIx[rm], scenes: [] };
 					}
-					roomScenes[scenes[i].room].scenes.push(scenes[i]);
+					roomScenes[rm].scenes.push(scenes[i]);
 				}
 			}
 
@@ -833,13 +835,12 @@ var DelayLightTimer = (function(api) {
 
 			api.registerEventHandler('on_ui_cpanel_before_close', DelayLightTimer, 'onBeforeCpanelClose');
 		}
-/*
 		catch (e)
 		{
 			console.log( 'Error in DelayLightTimer.configurePlugin(): ' + e.toString() );
-			console.trace();
+			console.log(e);
+			alert(e);
 		}
-*/
 	}
 
 	function launchSettings() {
