@@ -458,8 +458,13 @@ var DelayLightTimer = (function(api) {
 			if ( undefined !== scenes ) {
 				for ( i=0; i<scenes.length; i+=1 ) {
 					var rm = String(scenes[i].room || 0);
+					if ( undefined === scenes[i].room || undefined === roomIx[rm] ) {
+						console.log("*** SCENE #" + String(scenes[i].id) +
+							" " + String(scenes[i].name) + " ASSIGNED TO NON-EXISTENT ROOM " +
+							String(scenes[i].room));
+					}
 					if ( undefined === roomScenes[rm] ) {
-						roomScenes[rm] = { room: roomIx[rm], scenes: [] };
+						roomScenes[rm] = { room: roomIx[rm] || roomIx["0"], scenes: [] };
 					}
 					roomScenes[rm].scenes.push(scenes[i]);
 				}
