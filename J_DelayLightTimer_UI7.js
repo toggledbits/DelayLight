@@ -15,7 +15,7 @@ var DelayLightTimer = (function(api) {
 	// unique identifier for this plugin...
 	var uuid = '28017722-1101-11e8-9e9e-74d4351650de';
 
-	var pluginVersion = '1.13develop-19238';
+	var pluginVersion = '1.13develop-19239';
 
 	var myModule = {};
 
@@ -389,10 +389,11 @@ var DelayLightTimer = (function(api) {
 		}
 	}
 
-	function makeDeviceMenu( $target, filter ) {
+	function makeDeviceMenu( $target, filter, addScenes ) {
 		roomDevices.forEach( function( roomObj ) {
-			if ( roomObj.devices && roomObj.devices.length ) {
-				var $group = false;
+			var $group = false;
+			var j;
+			if ( (roomObj.devices || []).length ) {
 				for (j=0; j<roomObj.devices.length; ++j) {
 					if ( isHidden( roomObj.devices[j] ) ) continue;
 					if ( filter && ! filter( roomObj.devices[j] ) ) continue;
@@ -403,6 +404,19 @@ var DelayLightTimer = (function(api) {
 						.val(roomObj.devices[j].id)
 						.text(roomObj.devices[j].friendlyName || roomObj.devices[j].name)
 						.appendTo($group);
+				}
+			}
+			if ( addScenes && (roomObj.scenes || []).length ) {
+				for (j=0; j<roomObj.scenes.length; ++j) {
+					var sc = roomObj.scenes[j];
+					if ( sc.notification_only || sc.hidden ) continue;
+					if ( !$group ) {
+						$group = jQuery( '<optgroup/>', { id: roomObj.id, label: roomObj.name } ).appendTo( $target );
+					}
+					jQuery( '<option/>' )
+						.val( "S" + sc.id )
+						.text( "Scene: " + ( sc.name || sc.id ) )
+						.appendTo( $group );
 				}
 			}
 		});
@@ -420,9 +434,10 @@ var DelayLightTimer = (function(api) {
 
 			// Make our own list of devices, sorted by room.
 			var devices = api.cloneObject( api.getListOfDevices() );
-			var noroom = { "id": 0, "name": "No Room", "devices": [] };
+			var noroom = { "id": 0, "name": "No Room", "devices": [], "scenes": [] };
 			var rooms = [ noroom ];
 			var roomIx = {};
+			var roomObj;
 			roomIx[String(noroom.id)] = noroom;
 			var dd = devices.sort( function( a, b ) {
 				if ( a.name.toLowerCase() === b.name.toLowerCase() ) {
@@ -430,19 +445,38 @@ var DelayLightTimer = (function(api) {
 				}
 				return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
 			});
-			for (i=0; i<dd.length; i+=1) {
+			for (i=0; i<dd.length; i++) {
 				var devobj = api.cloneObject( dd[i] );
 				devobj.friendlyName = "#" + devobj.id + " " + devobj.name;
 				var roomid = devobj.room || 0;
-				var roomObj = roomIx[String(roomid)];
+				roomObj = roomIx[String(roomid)];
 				if ( roomObj === undefined ) {
 					roomObj = api.cloneObject( api.getRoomObject( roomid ) );
 					roomObj.name = roomObj.name || ( "Room #" + roomid );
 					roomObj.devices = [];
+					roomObj.scenes = [];
 					roomIx[String(roomid)] = roomObj;
-					rooms[rooms.length] = roomObj;
+					rooms.push( roomObj );
 				}
 				roomObj.devices.push( devobj );
+			}
+			/* Add scenes to the list, too */
+			var scenes = jsonp.ud.scenes; /* There is no api.getListOfScenes(). Really? */
+			for ( i=0; i<(scenes || []).length; i++ ) {
+				var rm = String(scenes[i].room || 0);
+				roomObj = roomIx[rm];
+				if ( undefined === roomObj ) {
+					roomObj = api.cloneObject( api.getRoomObject( scenes[i].room || 0 ) );
+					if ( ! roomObj ) {
+						console.log("*** Can't load room " + rm + " for scene " + String(scenes[i].id));
+						continue;
+					}
+					roomObj.devices = [];
+					roomObj.scenes = [];
+					roomIx[rm] = roomObj;
+					rooms.push( roomObj );
+				}
+				roomObj.scenes.push( scenes[i] );
 			}
 			roomDevices = rooms.sort(
 				// Special sort for room name -- sorts "No Room" last
@@ -453,22 +487,6 @@ var DelayLightTimer = (function(api) {
 					return a.name > b.name ? 1 : -1;
 				}
 			);
-			var scenes = jsonp.ud.scenes; /* There is no api.getListOfScenes(). Really? */
-			var roomScenes = [];
-			if ( undefined !== scenes ) {
-				for ( i=0; i<scenes.length; i+=1 ) {
-					var rm = String(scenes[i].room || 0);
-					if ( undefined === scenes[i].room || undefined === roomIx[rm] ) {
-						console.log("*** SCENE #" + String(scenes[i].id) +
-							" " + String(scenes[i].name) + " ASSIGNED TO NON-EXISTENT ROOM " +
-							String(scenes[i].room));
-					}
-					if ( undefined === roomScenes[rm] ) {
-						roomScenes[rm] = { room: roomIx[rm] || roomIx["0"], scenes: [] };
-					}
-					roomScenes[rm].scenes.push(scenes[i]);
-				}
-			}
 
 			html = "<style>";
 			html += ".tb-about { margin-top: 24px; }";
@@ -582,31 +600,10 @@ var DelayLightTimer = (function(api) {
 			});
 			makeDeviceMenu( jQuery( 'select.onDevice' ), function( d ) {
 				return d.id !== myDevice && isControllable( d );
-			});
+			}, true); /* with scenes */
 			makeDeviceMenu( jQuery( 'select.offDevice' ), function( d ) {
 				return d.id !== myDevice && isControllable( d );
-			});
-			/* Append scenes to on and off device menus */
-			roomScenes.forEach( function( l, ix ) {
-				/* PHR??? Interesting, using #id doesn't work for optgroup in jQuery 1.12 */
-				var $gra = jQuery( 'select.onDevice optgroup[id=' + ix + ']' );
-				if ( 0 === $gra.length ) {
-					$gra = jQuery( '<optgroup/>', { id: ix, label: l.room.name } )
-						.appendTo( jQuery( 'select.onDevice' ) );
-				}
-				var $grb = jQuery( 'select.offDevice optgroup[id=' + ix + ']' );
-				if ( 0 === $grb.length ) {
-					$grb = jQuery( '<optgroup/>', { id: ix, label: l.room.name } )
-						.appendTo( jQuery( 'select.offDevice' ) );
-				}
-				for ( var z=0; z<l.scenes.length; ++z ) {
-					jQuery( '<option/>' ).val( 'S'+l.scenes[z].id )
-						.text( 'Scene: '+l.scenes[z].name )
-						.appendTo( $gra )
-						.clone()
-						.appendTo( $grb );
-				}
-			});
+			}, true); /* with scenes */
 
 			// Restore values
 			var devnum, invert, row;
