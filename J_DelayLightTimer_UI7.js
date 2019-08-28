@@ -512,7 +512,7 @@ var DelayLightTimer = (function(api) {
 					html += '<div class="col-xs-12 col-sm-12 col-md-6"><label for="timer-auto">Manual Off Delay (seconds):</label><br/><input class="tbnumeric form-control form-control-sm" id="timer-man"></div>';
 					html += '</div>'; // #timing
 				html += '</div>';
-				html += '<div class="col-xs-12 col-sm-12 col-md-6"><h3>Active Period</h3>Active periods are the time ranges during which automatic triggering is enabled. If no periods are set (default), automatic triggering is always enabled.';
+				html += '<div class="col-xs-12 col-sm-12 col-md-6"><h3>Active Period</h3>Active periods are the time ranges during which automatic triggering is enabled. If no periods are set (default), automatic triggering is always enabled. Manual mode timing is always enabled and not prevented by this schedule.';
 					html += '<div id="schedgroup">';
 					html += '<div class="row schedrow" id="sched1">';
 					html += '<div class="col-xs-12 col-sm-12 col-md-10"><form class="form-inline"><select class="form-control form-controlsm fromtime hour"><option value="">none</option></select><select class="form-control form-control-sm fromtime minute"></select><label>&nbsp;to&nbsp;</label><select class="form-control form-controlsm totime hour"></select><select class="form-control form-control-sm totime minute"></select></form></div>';
@@ -534,7 +534,7 @@ var DelayLightTimer = (function(api) {
 					html += "</div>"; // sensorrow
 					html += '</div>'; // sensorgroup
 				html += '</div>'; // #triggers
-				html += '<div id="inhibitors" class="col-sm-12 col-md-6"><h3>Inhibitors</h3>Inhibitors, when tripped, prevent automatic timing from triggering. Triggering will not resume until all of these devices have returned to untripped state.';
+				html += '<div id="inhibitors" class="col-sm-12 col-md-6"><h3>Inhibitors</h3>Inhibitors, when tripped, prevent automatic timing from triggering. Triggering will not resume until all of these devices have returned to untripped state. Manual timing is not affected by inhibitors.';
 					html += '<div id="inhibitgroup">';
 					html += '<div class="row inhibitrow">';
 					html += '<div class="col-xs-12 col-sm-12 col-md-6"><select class="inhibit form-control form-control-sm"><option value="">--choose--</option>';

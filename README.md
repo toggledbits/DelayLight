@@ -245,6 +245,17 @@ When disabled, the DelayLight device will complete any in-progress timing cycle 
     luup.call_action( "urn:toggledbits.com:serviceId:DelayLightTimer", "SetEnabled", { newEnabledValue="1" }, deviceNum )
 </code>
 
+## Cautions ##
+
+**Do not have any loads controlled by more than one DelayLightTimer instance.** If you do this, each DelayLightTimer will see the other's control
+of the light as a manual operation and will start timing in manual mode. This occurs irrespective of inhibitors or schedules. A common example
+of when this error occurs is when trying to implement different delays for day and night: you set up two timers, both controlling the same light, but one
+with a schedule for daytime hours, and other for night hours, with the expectation that the schedules completely disable one or the other timer.
+This is not the case. Schedules and inhibitors only affect "Auto" timing mode. Manual timing is *always in effect*, unless the timer itself is
+disabled. The only way
+to make this kind of configuration work correctly is to disable one timer or the other (using the device's dashboard controls or the `SetEnabled` action in scenes, Reactor activities, Lua, etc.),
+so that only one timer is ever *enabled*. Only *disabling* a timer prevents the operation of *both* auto and manual timing modes and responses.
+
 ## Recipes ##
 
 If you come up with an interesting configuration that you think would make a good recipe here, please PM me via the Vera forums (http://forum.micasaverde.com/index.php/topic,60498.0.html).
