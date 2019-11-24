@@ -1,5 +1,9 @@
 # Change Log #
 
+## Version 1.13 (development)
+
+* Add `Cancel` action to cancel timer without affecting loads. This is primarily intended when disabling a DelayLightTimer, which would normally carry on with any outstanding timing and then stop. Disabling the instance followed by cancelling leaves the lights in their current state, no timing, until the timer is re-enabled (or the lights are manipulated by external actions).
+
 ## Version 1.12 (released)
 
 * Fix mishandling of schedule and device inhibit that resulted in manual mode not operating during inhibits. The documentation is clear that manual mode is always operative. If your configuration relies on the bug (disabling manual mode during schedule or device inhibits), set the `ApplyScheduleManual` or `ApplyInhibitorsManual` state variable, respectively, to 1; but note that because this is technically a bug, the behavior in future will be as documented and the state variable workaround to get the old behavior is *temporary* and will be removed at a later date. Full disable of both auto and manual should be done by disabling the timer instance (via the `SetEnabled` action).
