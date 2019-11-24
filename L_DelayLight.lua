@@ -11,9 +11,9 @@ local debugMode = false
 
 local _PLUGIN_ID = 9036
 local _PLUGIN_NAME = "DelayLight"
-local _PLUGIN_VERSION = "1.12"
+local _PLUGIN_VERSION = "1.13develop-19328"
 local _PLUGIN_URL = "https://www.toggledbits.com/delaylight"
-local _CONFIGVERSION = 19233
+local _CONFIGVERSION = 19328
 
 local MYSID = "urn:toggledbits-com:serviceId:DelayLight"
 local MYTYPE = "urn:schemas-toggledbits-com:device:DelayLight:1"
@@ -469,7 +469,8 @@ local function watchMap( m, tdev )
 	for _,ix in pairs( m ) do
 		local nn = ix.device
 		if luup.devices[nn] == nil then
-			L({level=2,msg="Device %1 (%2 list) not found... it may have been deleted!"}, nn, ix.list)
+			L({level=2,msg="%3 (#%4) %2 list device %1 not found... it may have been deleted!"},
+				nn, ix.list, luup.devices[tdev].description, tdev)
 		elseif not (ix.watched or false) then
 			ix.devicename = luup.devices[nn].description
 			-- Test most-specific to least-specific
@@ -513,8 +514,8 @@ local function watchMap( m, tdev )
 				ix.valueOn = "1"
 				ix.watched = true
 			else
-				L({level=2,msg="Device %3 %1 (%2) doesn't seem to be a sensor or controllable load. Ignoring."},
-					nn, ix.devicename, ix.list)
+				L({level=2,msg="%4 (#%5) %3 device #%1 (%2) doesn't seem to be a sensor or controllable load. Ignoring."},
+					nn, ix.devicename, ix.list, luup.devices[tdev].description, tdev)
 			end
 		else
 			D("watchTriggers() device %1 (%2) already on watch", nn, (luup.devices[nn] or {}).description)
@@ -537,22 +538,25 @@ local function loadTriggerMapFromScene( scene, m, list, tdev )
 
 	-- Anything on in first scene group?
 	if scd.groups == nil or scd.groups[1] == nil or scd.groups[1].actions == nil then
-		L({level=2,msg="Scene %1 (%2) has no group 1 actions, can't determine state."}, scd.id, scd.name)
+		L({level=2,msg="%3 (#%4) scene %1 (%2) has no group 1 actions, can't determine state."},
+			scd.id, scd.name, luup.devices[tdev].description, tdev)
 		return false
 	end
 	D("loadTriggerMapFromScene() examining devices in first scene group")
 	for _,ac in pairs(scd.groups[1].actions) do
 		local deviceNum = tonumber(ac.device,10)
 		if not luup.devices[deviceNum] then
-			L({level=2,msg="Device %1 used in scene %2 (%3) not found in luup.devices. Maybe it got deleted? Skipping."}, deviceNum, scd.id, scd.description)
+			L({level=2,msg="%4 (#%5) device %1 used in scene %2 (%3) not found in luup.devices. Maybe it got deleted? Skipping."}, 
+				deviceNum, scd.id, scd.description, luup.devices[tdev].description, tdev)
 		elseif isSwitchType( deviceNum, nil, tdev ) or luup.devices[deviceNum].device_type == MYTYPE then
 			-- Something we can handle natively.
 			m[deviceNum] = { device=deviceNum, invert=false, list=list }
 		else
 			-- Not a configured/able device, so we can't watch it.
 			local ld = luup.devices[deviceNum]
-			L({level=2,msg="Don't know how to handle scene %6 (%7) device %1 (%2) category %3.%4 type %5. Ignoring."},
-				deviceNum, ld.description, ld.category_num, ld.subcategory_num, ld.device_type, scd.id, scd.name)
+			L({level=2,msg="%8 (#%9) don't know how to handle scene %6 (%7) device %1 (%2) category %3.%4 type %5. Ignoring."},
+				deviceNum, ld.description, ld.category_num, ld.subcategory_num, ld.device_type, 
+				scd.id, scd.name, luup.devices[tdev].description, tdev)
 		end
 	end
 
@@ -574,7 +578,10 @@ local function deviceOnOff( targetDevice, state, vtDev )
 		local sceneId = tonumber(string.sub(targetDevice, 2),10)
 		D("deviceOnOff() running scene %1", sceneId)
 		local rc,rs = luup.call_action("urn:micasaverde-com:serviceId:HomeAutomationGateway1", "RunScene", {SceneNum = sceneId}, 0)
-		if rc ~= 0 then L({level=2,msg="Scene run failed, result %1, %2"}, rc, rs ) end
+		if rc ~= 0 then
+			L({level=2,msg="%3 (#%4) scene %5 run failed, result %1, %2"}, rc, rs,
+				luup.devices[vtDev].description, vtDev, targetDevice:sub(2))
+		end
 	else
 		-- Controlled load (hopefully).
 		local targetId, lvl, i
@@ -717,7 +724,8 @@ local function isMapDeviceOn( m, tdev )
 				return true, devnum -- nothing more to do
 			end
 		else
-			L("Device %1 (%2 list) not found in luup.devices or not ready, skipping.", devnum, dinfo.list)
+			L("%3 (#%4) %2 device %1 not found in luup.devices or not ready, skipping.",
+				devnum, dinfo.list, luup.devices[tdev].description, tdev)
 		end
 	end
 	return false
@@ -764,6 +772,7 @@ local function isInhibited( tdev )
 	return false -- None tripped/on
 end
 
+--[[
 -- Return whether item is on list (table as array)
 local function isOnList( l, e )
 	if l == nil or e == nil then return false end
@@ -772,6 +781,27 @@ local function isOnList( l, e )
 	end
 	return false
 end
+
+-- Get current schedule period
+local function getCurrentSchedule( tdev )
+	local s = "" -- getVar( "Schedule", "", tdev, TIMERSID )
+	local sched = false
+	if s ~= "" then
+		sched = json.decode( s )
+	end
+	if not sched then
+		sched = { default={ start=0, ['end']=1440, level=100, autodelay=nil, manualdelay=nil }, user={} }
+	end
+	local ndt = os.date("*t")
+	local tnow = tonumber( ndt['hour'] ) * 60 + tonumber( ndt['min'] )
+	for _,sc in ipairs(sched.user or {}) do
+		if tnow >= sc.start and tnow < sc['end'] then
+			return sc
+		end
+	end
+	return sched.default
+end
+--]]
 
 -- Active time period?
 local function isActivePeriod( tdev )
@@ -1142,7 +1172,7 @@ local function resetTimer( tdev )
 	luup.variable_set( TIMERSID, "Timing", 0, tdev )
 	luup.variable_set( TIMERSID, "OffTime", 0, tdev )
 	luup.variable_set( TIMERSID, "OnTime", 0, tdev )
-	-- don't do this... polling may need to happen. tick loop will stop itself if not -- scheduleTick( 0, tdev )
+	-- don't do this here... polling may need to happen. tick loop will stop itself if not -- scheduleTick( 0, tdev )
 end
 
 local function reset( force, tdev )
@@ -1184,6 +1214,17 @@ end
 function actionReset( force, dev )
 	L("Timer %1 (%2) reset action!", dev, luup.devices[dev].description)
 	reset( force, dev )
+end
+
+function actionCancel( dev )
+	L("Timer %1 (%2) cancel action!", dev, luup.devices[dev].description)
+	resetTimer( dev )
+	setMessage( isEnabled( dev ) and "Cancelled" or "Disabled", dev )
+	if not isEnabled( dev ) then
+		-- Cancel after disable, no need for more timing.
+		scheduleTick( 0, dev )
+	end
+	return true
 end
 
 function setDebug( state, tdev )
@@ -1337,6 +1378,11 @@ function startPlugin( pdev )
 	isOpenLuup = false
 	timerState = {}
 	watchData = {}
+
+	if getVarNumeric( "Enabled", 1, pdev, MYSID ) == 0 then
+		L{level=2,msg="DelayLight has been disabled by configuration; startup aborting."}
+		return true, "Disabled", _PLUGIN_NAME
+	end
 
 	-- Check for ALTUI and OpenLuup
 	for k,v in pairs(luup.devices) do
