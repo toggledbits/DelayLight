@@ -222,7 +222,7 @@ local function addEvent( t )
 	p.time = os.date("%Y%m%dT%H%M%S")
 	local dev = p.dev or pluginDevice
 	table.insert( timerState[tostring(dev)].eventList, p )
-	while #timerState[tostring(dev)].eventList > maxEvents do table.remove(timerState[tostring(dev)].eventList, 1) end
+	while #timerState[tostring(dev)].eventList > 0 and #timerState[tostring(dev)].eventList > maxEvents do table.remove(timerState[tostring(dev)].eventList, 1) end
 end
 
 -- Enabled?
