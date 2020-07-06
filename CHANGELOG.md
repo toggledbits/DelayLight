@@ -1,7 +1,8 @@
 # Change Log #
 
-## Version 1.13 (development)
+## Version 1.13 (development, 20187)
 
+* Enhance the device type tests to get around occasional devices that have incorrect services or variables associated with them. A switch, for example, that has SecuritySensor1/Tripped defined on it somehow (who knows how, but it has happened) will be reported as "supporting" the SecuritySensor1 service by Luup, thereby confusing the device handler. This would generally manifest as a timer coming up in "manual" timing mode at restart (users didn't notice other manual timing behaviors were not working).
 * Add `Cancel` action to cancel timer without affecting loads. This is primarily intended when disabling a DelayLightTimer, which would normally carry on with any outstanding timing and then stop. Disabling the instance followed by cancelling leaves the lights in their current state, no timing, until the timer is re-enabled (or the lights are manipulated by external actions).
 
 ## Version 1.12 (released)

@@ -11,9 +11,9 @@ local debugMode = false
 
 local _PLUGIN_ID = 9036
 local _PLUGIN_NAME = "DelayLight"
-local _PLUGIN_VERSION = "1.13develop-19328"
+local _PLUGIN_VERSION = "1.13develop-20187"
 local _PLUGIN_URL = "https://www.toggledbits.com/delaylight"
-local _CONFIGVERSION = 19328
+local _CONFIGVERSION = 20184
 
 local MYSID = "urn:toggledbits-com:serviceId:DelayLight"
 local MYTYPE = "urn:schemas-toggledbits-com:device:DelayLight:1"
@@ -473,8 +473,39 @@ local function watchMap( m, tdev )
 				nn, ix.list, luup.devices[tdev].description, tdev)
 		elseif not (ix.watched or false) then
 			ix.devicename = luup.devices[nn].description
-			-- Test most-specific to least-specific
-			if luup.device_supports_service( "urn:micasaverde-com:serviceId:DoorLock1", nn ) then
+			-- The device type tests here look redundant, but are specifically crafted
+			-- to work around numerous inconsistencies seen in the wild.
+			local dtype
+			local pd = luup.devices[nn].device_type
+			local xd = luup.attr_get( 'delaylight_handler', nn )
+			if (xd or "") ~= "" then
+				-- Attribute value will override the tests.
+				dtype = xd
+			elseif pd == "urn:schemas-micasaverde-com:device:DoorLock:1" or
+				luup.devices[nn].category_num == 7 then
+				dtype = "lock"
+			elseif pd == "urn:schemas-upnp-org:device:BinaryLight:1" or
+				luup.devices[nn].category_num == 3 then
+				dtype = "switch"
+			elseif pd == "urn:schemas-upnp-org:device:DimmableLight:1" or
+				pd:match("^urn%:schemas-upnp-org%:device%:DimmableRGBLight%:") or
+				luup.devices[nn].category_num == 2 then
+				dtype = "dimmer"
+			elseif pd == TIMERTYPE then
+				dtype = "dlt"
+			elseif luup.devices[nn].category_num == 4 then
+				dtype = "sensor"
+			elseif luup.device_supports_service( "urn:micasaverde-com:serviceId:DoorLock1", nn ) then
+				dtype = "lock"
+			elseif isSensorType( nn, nil, tdev ) then -- Security/binary sensor (has tripped/non-tripped)
+				dtype = "sensor"
+			elseif isDimmerType( nn, nil, tdev ) then -- dimmer/light
+				dtype = "dimmer"
+			elseif isSwitchType( nn, nil, tdev ) then -- light or switch
+				dtype = "switch"
+			end
+			L("%1 (#%2) handling device %3 (#%4) as %5", luup.devices[tdev].description, tdev, ix.devicename, nn, dtype)
+			if dtype == "lock" then
 				-- The early test here is important. See https://community.getvera.com/t/door-locks-have-misplaced-switchpower1-state-variables/208828
 				D("watchTriggers(): watching %1 (%2) as Lock", nn, ix.devicename)
 				watchVariable( "urn:micasaverde-com:serviceId:DoorLock1", "Status", nn, tdev )
@@ -482,21 +513,21 @@ local function watchMap( m, tdev )
 				ix.variable = "Status"
 				ix.valueOn = "1"
 				ix.watched = true
-			elseif luup.devices[nn].device_type == TIMERTYPE then
+			elseif dtype == "dlt" then
 				D("watchTriggers(): watching %1 (%2) as DelayLight", nn, ix.devicename)
 				watchVariable( TIMERSID, "Timing", nn, tdev )
 				ix.service = TIMERSID
 				ix.variable = "Timing"
 				ix.valueOn = { { comparison=">", value=0 } }
 				ix.watched = true
-			elseif isSensorType( nn, nil, tdev ) then -- Security/binary sensor (has tripped/non-tripped)
+			elseif dtype == "sensor" then
 				D("watchTriggers(): watching %1 (%2) as sensor", nn, ix.devicename)
 				watchVariable( SENSOR_SID, "Tripped", nn, tdev)
 				ix.service = SENSOR_SID
 				ix.variable = "Tripped"
 				ix.valueOn = "1"
 				ix.watched = true
-			elseif isDimmerType( nn, nil, tdev ) then -- dimmer/light
+			elseif dtype == "dimmer" then
 				-- Dimmer, watch switch and level status, but on/off is by switch status alone.
 				-- ref: http://wiki.micasaverde.com/index.php/Luup_Variables#Dimmable_Light ( modulo inconsistencies )
 				D("watchTriggers(): watching %1 (%2) as dimmer", nn, ix.devicename)
@@ -506,7 +537,7 @@ local function watchMap( m, tdev )
 				ix.variable = "Status"
 				ix.valueOn = "1"
 				ix.watched = true
-			elseif isSwitchType( nn, nil, tdev ) then -- light or switch
+			elseif dtype == "switch" then
 				D("watchTriggers(): watching %1 (%2) as switch", nn, ix.devicename)
 				watchVariable( SWITCH_SID, "Status", nn, tdev )
 				ix.service = SWITCH_SID
@@ -546,7 +577,7 @@ local function loadTriggerMapFromScene( scene, m, list, tdev )
 	for _,ac in pairs(scd.groups[1].actions) do
 		local deviceNum = tonumber(ac.device,10)
 		if not luup.devices[deviceNum] then
-			L({level=2,msg="%4 (#%5) device %1 used in scene %2 (%3) not found in luup.devices. Maybe it got deleted? Skipping."}, 
+			L({level=2,msg="%4 (#%5) device %1 used in scene %2 (%3) not found in luup.devices. Maybe it got deleted? Skipping."},
 				deviceNum, scd.id, scd.description, luup.devices[tdev].description, tdev)
 		elseif isSwitchType( deviceNum, nil, tdev ) or luup.devices[deviceNum].device_type == MYTYPE then
 			-- Something we can handle natively.
@@ -555,7 +586,7 @@ local function loadTriggerMapFromScene( scene, m, list, tdev )
 			-- Not a configured/able device, so we can't watch it.
 			local ld = luup.devices[deviceNum]
 			L({level=2,msg="%8 (#%9) don't know how to handle scene %6 (%7) device %1 (%2) category %3.%4 type %5. Ignoring."},
-				deviceNum, ld.description, ld.category_num, ld.subcategory_num, ld.device_type, 
+				deviceNum, ld.description, ld.category_num, ld.subcategory_num, ld.device_type,
 				scd.id, scd.name, luup.devices[tdev].description, tdev)
 		end
 	end
@@ -721,6 +752,7 @@ local function isMapDeviceOn( m, tdev )
 --]]
 			local isOn = isDeviceOn( devnum, dinfo, nil, tdev )
 			if isOn ~= nil and isOn then
+				D("isMapDeviceOn() device ON %1", devnum)
 				return true, devnum -- nothing more to do
 			end
 		else
