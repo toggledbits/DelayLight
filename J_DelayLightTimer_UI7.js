@@ -3,7 +3,7 @@
  * J_DelayLightTimer_UI7.js
  * Configuration interface for DelayLightTimer
  *
- * Copyright 2016,2017,2018 Patrick H. Rigney, All Rights Reserved.
+ * Copyright 2016,2017,2018,2020 Patrick H. Rigney, All Rights Reserved.
  * This file is part of DelayLight. For license information, see LICENSE at https://github.com/toggledbits/DelayLight
  */
 /* globals api,jQuery,$,jsonp */
@@ -15,7 +15,7 @@ var DelayLightTimer = (function(api) {
 	// unique identifier for this plugin...
 	var uuid = '28017722-1101-11e8-9e9e-74d4351650de';
 
-	var pluginVersion = '1.13develop-20187';
+	var pluginVersion = '1.13develop-20353';
 
 	var myModule = {};
 
@@ -371,9 +371,9 @@ var DelayLightTimer = (function(api) {
 		var el = jQuery('select option[value="' + devnum + '"]', row);
 		if ( 0 === el.length ) {
 			if ( devobj ) {
-				jQuery('select', row).append($('<option/>').val(devnum).text('Device #' + devnum + ' ' + devobj.name + ' (custom config)').prop('selected', true));
+				jQuery('select', row).append($('<option></option>').val(devnum).text('Device #' + devnum + ' ' + devobj.name + ' (custom config)').prop('selected', true));
 			} else {
-				jQuery('select', row).append($('<option/>').val(devnum).text('Device #' + devnum + ' (missing device)').prop('selected', true));
+				jQuery('select', row).append($('<option></option>').val(devnum).text('Device #' + devnum + ' (missing device)').prop('selected', true));
 			}
 		} else {
 			el.prop('selected', true);
@@ -398,9 +398,9 @@ var DelayLightTimer = (function(api) {
 					if ( isHidden( roomObj.devices[j] ) ) continue;
 					if ( filter && ! filter( roomObj.devices[j] ) ) continue;
 					if ( !$group ) {
-						$group = jQuery( '<optgroup/>', { id: roomObj.id, label: roomObj.name } ).appendTo( $target );
+						$group = jQuery( '<optgroup></optgroup>', { id: roomObj.id, label: roomObj.name } ).appendTo( $target );
 					}
-					jQuery( '<option/>' )
+					jQuery( '<option></option>' )
 						.val(roomObj.devices[j].id)
 						.text(roomObj.devices[j].friendlyName || roomObj.devices[j].name)
 						.appendTo($group);
@@ -411,9 +411,9 @@ var DelayLightTimer = (function(api) {
 					var sc = roomObj.scenes[j];
 					if ( sc.notification_only || sc.hidden ) continue;
 					if ( !$group ) {
-						$group = jQuery( '<optgroup/>', { id: roomObj.id, label: roomObj.name } ).appendTo( $target );
+						$group = jQuery( '<optgroup></optgroup>', { id: roomObj.id, label: roomObj.name } ).appendTo( $target );
 					}
-					jQuery( '<option/>' )
+					jQuery( '<option></option>' )
 						.val( "S" + sc.id )
 						.text( "Scene: " + ( sc.name || sc.id ) )
 						.appendTo( $group );
@@ -508,8 +508,8 @@ var DelayLightTimer = (function(api) {
 			html += '<div class="row">';
 				html += '<div class="col-xs-12 col-sm-12 col-md-6"><h3>Timing</h3>DelayLight uses two timers: <i>automatic</i>, for sensor-triggered events, and <i>manual</i> for load-triggered events.';
 					html += '<div class="row" id="timing">';
-					html += '<div class="col-xs-12 col-sm-12 col-md-6"><label for="timer-auto">Automatic Off Delay (seconds):</label><br/><input class="tbnumeric form-control form-control-sm" id="timer-auto"></div>';
-					html += '<div class="col-xs-12 col-sm-12 col-md-6"><label for="timer-auto">Manual Off Delay (seconds):</label><br/><input class="tbnumeric form-control form-control-sm" id="timer-man"></div>';
+					html += '<div class="col-xs-12 col-sm-12 col-md-6"><label for="timer-auto">Automatic Off Delay (seconds):</label><br><input class="tbnumeric form-control form-control-sm" id="timer-auto"></div>';
+					html += '<div class="col-xs-12 col-sm-12 col-md-6"><label for="timer-auto">Manual Off Delay (seconds):</label><br><input class="tbnumeric form-control form-control-sm" id="timer-man"></div>';
 					html += '</div>'; // #timing
 				html += '</div>';
 				html += '<div class="col-xs-12 col-sm-12 col-md-6"><h3>Active Period</h3>Active periods are the time ranges during which automatic triggering is enabled. If no periods are set (default), automatic triggering is always enabled. Manual mode timing is always enabled and not prevented by this schedule.';
@@ -572,16 +572,16 @@ var DelayLightTimer = (function(api) {
 
 			html += '<div class="row"><div class="col-sm-12"><h3>Automatic Timing Options</h3>These options apply to automatic timing only.</div></div>';
 			html += '<div class="row">';
-			html += '<div class="col-sm-12 col-md-6 col-lg-3"><h4>Hold-over Mode</h4>By default, "off" devices are turned off when timer expires (mode 0).<br/><select class="tbholdon form-control form-control-sm" id="holdon"><option value="0">(0) Turn off "Off Devices" upon timer expiration</option><option value="1">(1) Do not turn off until timer expires and all triggered sensors have reset</option><option value="2">(2) Do not start off-delay timer until triggered sensors reset</option></select></div>';
-			html += '<div class="col-sm-12 col-md-6 col-lg-3"><h4>"On" Delay</h4>When a trigger device trips, wait this many seconds before turning "On Devices" on:<br/><input class="tbnumeric form-control form-control-sm" id="timer-on"></div>';
+			html += '<div class="col-sm-12 col-md-6 col-lg-3"><h4>Hold-over Mode</h4>By default, "off" devices are turned off when timer expires (mode 0).<br><select class="tbholdon form-control form-control-sm" id="holdon"><option value="0">(0) Turn off "Off Devices" upon timer expiration</option><option value="1">(1) Do not turn off until timer expires and all triggered sensors have reset</option><option value="2">(2) Do not start off-delay timer until triggered sensors reset</option></select></div>';
+			html += '<div class="col-sm-12 col-md-6 col-lg-3"><h4>"On" Delay</h4>When a trigger device trips, wait this many seconds before turning "On Devices" on:<br><input class="tbnumeric form-control form-control-sm" id="timer-on"></div>';
 			html += '<div class="col-sm-12 col-md-6 col-lg-3"><h4>Quieting</h4>When all lights are turned off manually, ignore the trigger devices for (seconds, >= 0):<input id="quieting" type="text" class="form-control form-control-sm tbnumeric"></div>';
-			html += '<div class="col-sm-12 col-md-6 col-lg-3 housemodes"><h4>House Modes</h4>Only trigger in the selected house modes (any if no modes are selected):<br/><input type="checkbox" class="tbhousemode" id="mode1">Home <input type="checkbox" class="tbhousemode" id="mode2">Away <input type="checkbox" class="tbhousemode" id="mode3">Night <input type="checkbox" class="tbhousemode" id="mode4">Vacation</div>';
+			html += '<div class="col-sm-12 col-md-6 col-lg-3 housemodes"><h4>House Modes</h4>Only trigger in the selected house modes (any if no modes are selected):<br><input type="checkbox" class="tbhousemode" id="mode1">Home <input type="checkbox" class="tbhousemode" id="mode2">Away <input type="checkbox" class="tbhousemode" id="mode3">Night <input type="checkbox" class="tbhousemode" id="mode4">Vacation</div>';
 			html += '</div>'; /* row */
 
 			html += '<div class="clearfix">';
 
 			html += '<div id="tbbegging"><em>Find DelayLight useful?</em> Please consider <a href="https://www.toggledbits.com/donate" target="_blank">a small donation</a> to support my work and this and other plugins. I am grateful for any support you choose to give!</div>';
-			html += '<div id="tbcopyright">DelayLight ver ' + pluginVersion + ' &copy; 2016,2017,2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. For documentation and license, please see this project\'s <a href="https://github.com/toggledbits/DelayLight" target="_blank">GitHub repository</a>.</div>';
+			html += '<div id="tbcopyright">DelayLight ver ' + pluginVersion + ' &copy; 2016,2017,2018,2020 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. For documentation and license, please see this project\'s <a href="https://github.com/toggledbits/DelayLight" target="_blank">GitHub repository</a>.</div>';
 			html += '<div id="supportlinks">Support links: ' +
 				' <a href="https://github.com/toggledbits/DelayLight/" target="_blank">Documentation/README</a>' +
 				' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_DelayLight&action=debug" target="_blank">Toggle&nbsp;Debug</a>' +

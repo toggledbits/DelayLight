@@ -3,7 +3,7 @@
  * J_DelayLight_ALTUI.js
  * Special presentation for ALTUI for DelayLight
  *
- * Copyright 2016,2017,2018 Patrick H. Rigney, All Rights Reserved.
+ * Copyright 2016,2017,2018,2020 Patrick H. Rigney, All Rights Reserved.
  * This file is part of DelayLight. For license information, see LICENSE at https://github.com/toggledbits/DelayLight
  */
 /* globals window,MultiBox,ALTUI_PluginDisplays,_T */
@@ -20,7 +20,7 @@ var DelayLight_ALTUI = ( function( window, undefined ) {
 	function _draw( device ) {
 			var html ="";
 			var message = MultiBox.getStatus( device, "urn:toggledbits-com:serviceId:DelayLight", "Message");
-			html += '<div>' + message + '</div>';
+			html += '<div>' + String(message) + '</div>';
 			return html;
 	}
 
